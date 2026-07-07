@@ -1,11 +1,46 @@
-# In production, the Platform Team would create and review tenant RBAC during
-# tenant onboarding. This prototype keeps the permissions small and readable.
+# The Flink Kubernetes Operator runs in the platform-system namespace.
+# During tenant onboarding, the Platform Team grants it namespace-scoped
+# permissions for each tenant namespace.
+#
+# This Role only applies inside tenant-a. It does not grant tenant-a access to
+# tenant-b, and it does not control Kafka topic access. Kafka permissions are
+# managed separately from Kubernetes RBAC.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: flink-operator-tenant-a
+  name: tenant-a-flink-operator-role
   namespace: tenant-a
 rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+      - configmaps
+      - secrets
+      - events
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - flink.apache.org
     resources:
@@ -19,44 +54,18 @@ rules:
       - update
       - patch
       - delete
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-      - services
-      - configmaps
-      - events
-    verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-    verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
 ---
+# Bind the tenant-a Role to the operator service account in platform-system.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: flink-operator-tenant-a
+  name: tenant-a-flink-operator-rolebinding
   namespace: tenant-a
 subjects:
   - kind: ServiceAccount
     name: flink-kubernetes-operator
-    namespace: flink-operator-system
+    namespace: platform-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: flink-operator-tenant-a
+  name: tenant-a-flink-operator-role
