@@ -1,0 +1,6 @@
+apiVersion: v2
+name: flink-job
+description: Shared Platform Team Helm chart for deploying tenant Apache Flink jobs with the Flink Kubernetes Operator.
+type: application
+version: 0.1.0
+appVersion: "1.19"

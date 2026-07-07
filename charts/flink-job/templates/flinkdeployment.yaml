@@ -1,0 +1,44 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: {{ include "flink-job.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "flink-job.labels" . | nindent 4 }}
+spec:
+  image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+  imagePullPolicy: {{ .Values.image.pullPolicy }}
+  flinkVersion: {{ .Values.flinkVersion }}
+  serviceAccount: {{ .Values.serviceAccount }}
+  flinkConfiguration:
+    pipeline.name: "{{ .Values.tenantName }}-flink-job"
+    taskmanager.numberOfTaskSlots: "{{ .Values.job.parallelism }}"
+    execution.checkpointing.interval: {{ .Values.checkpointing.interval | quote }}
+    prototype.tenant.name: {{ .Values.tenantName | quote }}
+    prototype.kafka.bootstrap.servers: {{ .Values.kafka.bootstrapServers | quote }}
+    prototype.kafka.input.topics: {{ join "," .Values.kafka.inputTopics | quote }}
+    prototype.kafka.output.topic: {{ .Values.kafka.outputTopic | quote }}
+    prototype.kafka.consumer.group.id: {{ .Values.kafka.consumerGroupId | quote }}
+  jobManager:
+    resource:
+      cpu: {{ .Values.jobManager.resource.cpu }}
+      memory: {{ .Values.jobManager.resource.memory | quote }}
+  taskManager:
+    replicas: {{ .Values.taskManager.replicas }}
+    resource:
+      cpu: {{ .Values.taskManager.resource.cpu }}
+      memory: {{ .Values.taskManager.resource.memory | quote }}
+  job:
+    jarURI: {{ .Values.job.jarURI | quote }}
+    entryClass: {{ .Values.job.className | quote }}
+    parallelism: {{ .Values.job.parallelism }}
+    upgradeMode: {{ .Values.job.upgradeMode }}
+    state: running
+    restartNonce: {{ .Values.job.restartNonce }}
+    args:
+      - "--tenant={{ .Values.tenantName }}"
+      - "--kafka.bootstrap.servers={{ .Values.kafka.bootstrapServers }}"
+      - "--input.topics={{ join "," .Values.kafka.inputTopics }}"
+      - "--output.topic={{ .Values.kafka.outputTopic }}"
+      - "--consumer.group.id={{ .Values.kafka.consumerGroupId }}"
+      - "--checkpoint.interval={{ .Values.checkpointing.interval }}"

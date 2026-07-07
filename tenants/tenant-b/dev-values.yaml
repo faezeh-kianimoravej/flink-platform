@@ -1,0 +1,26 @@
+tenantName: tenant-b
+namespace: tenant-b
+
+image:
+  repository: local/tenant-b-flink-job
+  tag: dev
+  pullPolicy: IfNotPresent
+
+flinkVersion: v1_19
+
+job:
+  className: com.example.tenantb.OrdersEnrichmentJob
+  jarURI: local:///opt/flink/usrlib/tenant-b-flink-job.jar
+  parallelism: 1
+  restartNonce: 1
+
+kafka:
+  bootstrapServers: kafka:9092
+  inputTopics:
+    - tenant-b-orders
+    - tenant-b-customers
+  outputTopic: tenant-b-enriched-orders
+  consumerGroupId: tenant-b-flink-job
+
+checkpointing:
+  interval: 30s

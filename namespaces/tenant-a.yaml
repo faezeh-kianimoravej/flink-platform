@@ -1,0 +1,10 @@
+# Isolated namespace for Tenant A Flink jobs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-a
+  labels:
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/environment: local
+    platform.example.com/tenant: tenant-a

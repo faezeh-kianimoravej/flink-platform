@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-a-flink-job
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_ME/flink-platform.git
+    targetRevision: main
+    path: charts/flink-job
+    helm:
+      releaseName: tenant-a
+      valueFiles:
+        - ../../tenants/tenant-a/dev-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-a
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

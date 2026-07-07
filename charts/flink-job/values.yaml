@@ -1,0 +1,40 @@
+tenantName: demo-tenant
+namespace: demo-tenant
+
+image:
+  repository: local/flink-demo-job
+  tag: dev
+  pullPolicy: IfNotPresent
+
+flinkVersion: v1_19
+
+serviceAccount: flink
+
+jobManager:
+  resource:
+    cpu: 1
+    memory: "1024m"
+
+taskManager:
+  replicas: 1
+  resource:
+    cpu: 1
+    memory: "1024m"
+
+job:
+  className: com.example.flink.DemoJob
+  jarURI: local:///opt/flink/usrlib/job.jar
+  parallelism: 1
+  restartNonce: 1
+  upgradeMode: stateless
+
+kafka:
+  bootstrapServers: kafka:9092
+  inputTopics:
+    - demo-orders
+    - demo-customers
+  outputTopic: demo-enriched-orders
+  consumerGroupId: demo-flink-job
+
+checkpointing:
+  interval: 30s
