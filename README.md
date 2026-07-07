@@ -88,6 +88,10 @@ kubectl get namespace tenant-a --show-labels
 kubectl get namespace tenant-b --show-labels
 ```
 
+## Tenant Onboarding
+
+Tenant onboarding is managed declaratively from this platform repository. Namespace manifests live in `namespaces/`, and tenant RBAC design is documented in `rbac/README.md`.
+
 ## Shared Helm Chart
 
 The shared Helm chart is owned by the Platform Team. It provides a reusable `FlinkDeployment` template for all tenant Flink jobs, using the Apache Flink Kubernetes Operator custom resource.
@@ -169,49 +173,6 @@ Optional production renders:
 ```bash
 helm template tenant-a-prod charts/flink-job -f tenants/tenant-a/prod-values.yaml
 helm template tenant-b-prod charts/flink-job -f tenants/tenant-b/prod-values.yaml
-```
-
-# Tenant RBAC
-
-The Platform Team provisions Kubernetes RBAC for every onboarded tenant namespace. These RBAC resources allow the Flink Kubernetes Operator to manage Flink workloads inside each tenant namespace while maintaining tenant isolation.
-
-Each tenant receives its own namespace-scoped `Role` and `RoleBinding`. The `Role` grants only the permissions required for the Flink Kubernetes Operator to reconcile Flink resources in that namespace. The `RoleBinding` associates those permissions with the Flink Kubernetes Operator service account running in the `platform-system` namespace.
-
-Tenant isolation is preserved:
-
-- Tenant A cannot manage resources inside Tenant B.
-- Tenant B cannot manage resources inside Tenant A.
-- Kubernetes RBAC provides operational isolation only.
-- Access to Kafka topics is controlled separately and is outside the scope of Kubernetes RBAC.
-
-Architecture note:
-
-```text
-Platform Team
-        |
-        v
-Creates Namespace
-        |
-        v
-Creates Role
-        |
-        v
-Creates RoleBinding
-        |
-        v
-Flink Operator can manage resources only inside that tenant namespace
-```
-
-Apply tenant RBAC:
-
-```bash
-kubectl apply -f rbac/
-
-kubectl get role -n tenant-a
-kubectl get rolebinding -n tenant-a
-
-kubectl get role -n tenant-b
-kubectl get rolebinding -n tenant-b
 ```
 
 ## Platform Responsibilities
