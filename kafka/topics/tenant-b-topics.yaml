@@ -1,0 +1,32 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: tenant-b-orders
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+spec:
+  partitions: 1
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: tenant-b-customers
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+spec:
+  partitions: 1
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: tenant-b-enriched-orders
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+spec:
+  partitions: 1
+  replicas: 1

@@ -1,0 +1,65 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: controller
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/component: kafka
+    platform.example.com/environment: local
+spec:
+  replicas: 1
+  roles:
+    - controller
+  storage:
+    type: ephemeral
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: broker
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/component: kafka
+    platform.example.com/environment: local
+spec:
+  replicas: 1
+  roles:
+    - broker
+  storage:
+    type: ephemeral
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: flink-platform-kafka
+  namespace: kafka-system
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+  labels:
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/component: kafka
+    platform.example.com/environment: local
+spec:
+  kafka:
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      auto.create.topics.enable: "false"
+  entityOperator:
+    topicOperator: {}

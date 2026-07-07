@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka-system
+  labels:
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/component: kafka
+    platform.example.com/environment: local

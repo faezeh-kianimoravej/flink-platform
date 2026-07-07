@@ -102,6 +102,10 @@ Tenant RBAC is documented in [rbac/README.md](rbac/README.md).
 
 The Flink Kubernetes Operator is a shared platform component installed in the `platform-system` namespace. Installation and verification are documented in [operator/README.md](operator/README.md).
 
+## Kafka Messaging Layer
+
+Kafka is the shared messaging layer for tenant Flink jobs. The local Kafka setup guide is documented in [kafka/README.md](kafka/README.md).
+
 ## Shared Helm Chart
 
 The shared Helm chart is owned by the Platform Team. It provides a reusable `FlinkDeployment` template for all tenant Flink jobs, using the Apache Flink Kubernetes Operator custom resource.
@@ -246,6 +250,7 @@ flink-platform/
   namespaces/
   rbac/
   operator/
+  kafka/
   argocd/
   README.md
 ```
