@@ -98,6 +98,10 @@ kubectl apply -f namespaces/ -f rbac/
 
 Tenant RBAC is documented in [rbac/README.md](rbac/README.md).
 
+## Flink Kubernetes Operator
+
+The Flink Kubernetes Operator is a shared platform component installed in the `platform-system` namespace. Installation and verification are documented in [operator/README.md](operator/README.md).
+
 ## Shared Helm Chart
 
 The shared Helm chart is owned by the Platform Team. It provides a reusable `FlinkDeployment` template for all tenant Flink jobs, using the Apache Flink Kubernetes Operator custom resource.
@@ -241,6 +245,7 @@ flink-platform/
     tenant-b/
   namespaces/
   rbac/
+  operator/
   argocd/
   README.md
 ```
