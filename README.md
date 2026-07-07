@@ -90,7 +90,13 @@ kubectl get namespace tenant-b --show-labels
 
 ## Tenant Onboarding
 
-Tenant onboarding is managed declaratively from this platform repository. Namespace manifests live in `namespaces/`, and tenant RBAC design is documented in `rbac/README.md`.
+Tenant onboarding is managed declaratively from this platform repository. Namespace creation and RBAC are applied together during tenant onboarding:
+
+```bash
+kubectl apply -f namespaces/ -f rbac/
+```
+
+Tenant RBAC is documented in [rbac/README.md](rbac/README.md).
 
 ## Shared Helm Chart
 
