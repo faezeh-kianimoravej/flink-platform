@@ -102,6 +102,10 @@ Tenant RBAC is documented in [rbac/README.md](rbac/README.md).
 
 The Flink Kubernetes Operator is a shared platform component installed in the `platform-system` namespace. Installation and verification are documented in [operator/README.md](operator/README.md).
 
+## Argo CD
+
+Argo CD is the GitOps controller for the platform and runs in the `platform-system` namespace. Installation, UI access, login, and GitOps repository usage are documented in [argocd/README.md](argocd/README.md).
+
 ## Kafka Messaging Layer
 
 Kafka is the shared messaging layer for tenant Flink jobs. The local Kafka setup guide is documented in [kafka/README.md](kafka/README.md).

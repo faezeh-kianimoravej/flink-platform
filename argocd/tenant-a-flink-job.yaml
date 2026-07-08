@@ -2,11 +2,11 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: tenant-a-flink-job
-  namespace: argocd
+  namespace: platform-system
 spec:
   project: default
   source:
-    repoURL: https://github.com/REPLACE_ME/flink-platform.git
+    repoURL: https://github.com/faezeh-kianimoravej/flink-platform.git
     targetRevision: main
     path: charts/flink-job
     helm:
