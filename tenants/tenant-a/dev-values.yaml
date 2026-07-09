@@ -5,7 +5,7 @@ image:
   repository: ghcr.io/faezeh-kianimoravej/tenant-a-flink-job
   # Replace with the immutable Git SHA tag pushed by tenant-a CI after the
   # Java 21 / Flink 2.2.1 tenant image build succeeds.
-  tag: TODO_REPLACE_WITH_TENANT_A_COMMIT_SHA
+  tag: 1c67a738efa8df3929fe41224b38851288baef2b
   pullPolicy: IfNotPresent
 
 flinkVersion: v2_2
