@@ -5,6 +5,12 @@
 # This Role only applies inside tenant-b. It does not grant tenant-b access to
 # tenant-a, and it does not control Kafka topic access. Kafka permissions are
 # managed separately from Kubernetes RBAC.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flink
+  namespace: tenant-b
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

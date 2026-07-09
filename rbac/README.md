@@ -5,10 +5,11 @@ Kubernetes RBAC is part of the tenant onboarding process managed by the Platform
 When a new tenant is onboarded, the platform provisions:
 
 - Namespace
+- ServiceAccount
 - Role
 - RoleBinding
 
-These resources allow the Flink Kubernetes Operator to manage Flink workloads inside that tenant namespace.
+These resources allow the Flink Kubernetes Operator to manage Flink workloads inside that tenant namespace. Each tenant namespace includes a `flink` ServiceAccount because the tenant `FlinkDeployment` runs JobManager and TaskManager pods with `serviceAccount: flink`.
 
 ## Why RBAC?
 
@@ -27,6 +28,8 @@ During tenant onboarding, namespace-scoped permissions are granted through `Role
 
 The operator can reconcile `FlinkDeployment` resources only inside namespaces where RBAC has been provisioned. For this prototype, each tenant RBAC manifest grants the operator the Kubernetes permissions needed to reconcile Flink workloads in that tenant namespace.
 
+The `FlinkDeployment` also references the tenant-local `flink` ServiceAccount. Without this ServiceAccount in the tenant namespace, JobManager pod creation fails because Kubernetes cannot run the pod with the requested service account.
+
 ## Tenant Onboarding Flow
 
 ```text
@@ -34,6 +37,9 @@ Platform Team
         |
         v
 Create Namespace
+        |
+        v
+Create ServiceAccount
         |
         v
 Create Role
@@ -61,6 +67,7 @@ This applies:
 
 - tenant namespaces
 - the `platform-system` namespace
+- tenant `flink` ServiceAccounts
 - tenant-specific Roles
 - tenant-specific RoleBindings
 
@@ -68,12 +75,14 @@ In the final GitOps flow, Argo CD will synchronize these manifests automatically
 
 ## Verification
 
-After applying the manifests, verify that each tenant namespace has its own Role and RoleBinding:
+After applying the manifests, verify that each tenant namespace has its own `flink` ServiceAccount, Role, and RoleBinding:
 
 ```bash
+kubectl get serviceaccount flink -n tenant-a
 kubectl get role -n tenant-a
 kubectl get rolebinding -n tenant-a
 
+kubectl get serviceaccount flink -n tenant-b
 kubectl get role -n tenant-b
 kubectl get rolebinding -n tenant-b
 ```
