@@ -133,6 +133,8 @@ kubectl apply -f argocd/tenant-a-flink-job.yaml
 kubectl apply -f argocd/tenant-b-flink-job.yaml
 ```
 
+The tenant Applications configure `ignoreDifferences` for `FlinkDeployment` metadata fields managed by Kubernetes or the Flink Kubernetes Operator, including finalizers, managed fields, generation, and the kubectl last-applied annotation. This prevents those runtime metadata changes from being reported as GitOps drift and avoids a false Argo CD `OutOfSync` status after the Operator reconciles the resource.
+
 Verify that Argo CD has registered the Applications:
 
 ```bash

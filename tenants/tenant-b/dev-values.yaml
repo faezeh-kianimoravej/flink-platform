@@ -9,7 +9,7 @@ image:
 flinkVersion: v1_19
 
 job:
-  className: com.example.tenantb.OrdersEnrichmentJob
+  className: com.example.tenantb.TenantBFlinkJobApplication
   jarURI: local:///opt/flink/usrlib/tenant-b-flink-job.jar
   parallelism: 1
   restartNonce: 1

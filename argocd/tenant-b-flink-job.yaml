@@ -16,6 +16,14 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: tenant-b
+  ignoreDifferences:
+    - group: flink.apache.org
+      kind: FlinkDeployment
+      jsonPointers:
+        - /metadata/finalizers
+        - /metadata/managedFields
+        - /metadata/generation
+        - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
   syncPolicy:
     automated:
       prune: true
