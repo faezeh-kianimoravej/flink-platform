@@ -3,22 +3,24 @@ namespace: tenant-b
 
 image:
   repository: ghcr.io/faezeh-kianimoravej/tenant-b-flink-job
-  tag: f4b07e4ed36c5dac05d6b6322b8486ac70685957
+  # Replace with the immutable Git SHA tag pushed by tenant-b CI after the
+  # Java 21 / Flink 2.2.1 tenant image build succeeds.
+  tag: TODO_REPLACE_WITH_TENANT_B_COMMIT_SHA
   pullPolicy: IfNotPresent
 
-flinkVersion: v1_19
+flinkVersion: v2_2
 
 job:
   className: com.example.tenantb.TenantBFlinkJobApplication
   jarURI: local:///opt/flink/usrlib/tenant-b-flink-job.jar
   parallelism: 1
-  restartNonce: 1
+  restartNonce: 7
 
 kafka:
-  bootstrapServers: kafka:9092
+  bootstrapServers: flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092
   inputTopics:
     - tenant-b-orders
-    - tenant-b-customers
+    - tenant-b-products
   outputTopic: tenant-b-enriched-orders
   consumerGroupId: tenant-b-flink-job
 

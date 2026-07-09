@@ -10,6 +10,7 @@ spec:
   imagePullPolicy: {{ .Values.image.pullPolicy }}
   flinkVersion: {{ .Values.flinkVersion }}
   serviceAccount: {{ .Values.serviceAccount }}
+  restartNonce: {{ .Values.job.restartNonce }}
   flinkConfiguration:
     pipeline.name: "{{ .Values.tenantName }}-flink-job"
     taskmanager.numberOfTaskSlots: "{{ .Values.job.parallelism }}"
@@ -34,7 +35,6 @@ spec:
     parallelism: {{ .Values.job.parallelism }}
     upgradeMode: {{ .Values.job.upgradeMode }}
     state: running
-    restartNonce: {{ .Values.job.restartNonce }}
     args:
       - "--tenant={{ .Values.tenantName }}"
       - "--kafka.bootstrap.servers={{ .Values.kafka.bootstrapServers }}"

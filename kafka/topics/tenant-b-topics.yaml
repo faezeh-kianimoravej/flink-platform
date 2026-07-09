@@ -12,7 +12,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
-  name: tenant-b-customers
+  name: tenant-b-products
   namespace: kafka-system
   labels:
     strimzi.io/cluster: flink-platform-kafka

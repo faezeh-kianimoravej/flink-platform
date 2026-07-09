@@ -2,11 +2,12 @@ tenantName: tenant-a
 namespace: tenant-a
 
 image:
-  repository: local/tenant-a-flink-job
-  tag: prod
+  repository: ghcr.io/faezeh-kianimoravej/tenant-a-flink-job
+  # Replace with the immutable Git SHA tag promoted to production.
+  tag: TODO_REPLACE_WITH_TENANT_A_COMMIT_SHA
   pullPolicy: IfNotPresent
 
-flinkVersion: v1_19
+flinkVersion: v2_2
 
 job:
   className: com.example.tenanta.TenantAFlinkJobApplication
@@ -15,7 +16,7 @@ job:
   restartNonce: 1
 
 kafka:
-  bootstrapServers: kafka:9092
+  bootstrapServers: flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092
   inputTopics:
     - tenant-a-orders
     - tenant-a-customers

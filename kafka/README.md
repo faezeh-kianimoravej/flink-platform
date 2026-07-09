@@ -159,7 +159,7 @@ Tenant A:
 Tenant B:
 
 - `tenant-b-orders`
-- `tenant-b-customers`
+- `tenant-b-products`
 - `tenant-b-enriched-orders`
 
 # Creating Tenant Topics
@@ -202,7 +202,7 @@ Tenant B:
 Reads:
 
 - `tenant-b-orders`
-- `tenant-b-customers`
+- `tenant-b-products`
 
 Writes:
 

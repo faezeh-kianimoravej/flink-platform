@@ -61,7 +61,8 @@ rules:
       - patch
       - delete
 ---
-# Bind the tenant-b Role to the operator service account in platform-system.
+# Bind the tenant-b Role to the operator service account in platform-system and
+# to the tenant runtime service account used by JobManager and TaskManager pods.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -71,6 +72,9 @@ subjects:
   - kind: ServiceAccount
     name: flink-kubernetes-operator
     namespace: platform-system
+  - kind: ServiceAccount
+    name: flink
+    namespace: tenant-b
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
