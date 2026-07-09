@@ -2,8 +2,8 @@ tenantName: tenant-b
 namespace: tenant-b
 
 image:
-  repository: local/tenant-b-flink-job
-  tag: dev
+  repository: ghcr.io/faezeh-kianimoravej/tenant-b-flink-job
+  tag: 6f2098f7b9b08852a4b4b7c035ff253478958a3b
   pullPolicy: IfNotPresent
 
 flinkVersion: v1_19
