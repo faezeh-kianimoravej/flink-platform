@@ -1,0 +1,81 @@
+name: Reusable Flink Job CI
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: "Container image name to publish under the repository owner in GHCR."
+        required: true
+        type: string
+      java_version:
+        description: "Temurin Java version used for Maven build and tests."
+        required: false
+        default: "21"
+        type: string
+      dockerfile_path:
+        description: "Path to the Dockerfile in the tenant job repository."
+        required: false
+        default: "Dockerfile"
+        type: string
+      jar_path:
+        description: "Path or glob for the built job JAR produced by Maven."
+        required: false
+        default: "target/*.jar"
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-and-publish:
+    name: Build, Test, and Publish Image
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: maven
+
+      - name: Build and test with Maven
+        run: mvn clean verify
+
+      - name: Verify Flink job JAR exists
+        shell: bash
+        run: |
+          shopt -s nullglob
+          jars=( ${{ inputs.jar_path }} )
+          if [ ${#jars[@]} -eq 0 ]; then
+            echo "No JAR found for jar_path: ${{ inputs.jar_path }}"
+            exit 1
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --file "${{ inputs.dockerfile_path }}" \
+            --build-arg JAR_PATH="${{ inputs.jar_path }}" \
+            --tag "$IMAGE:latest" \
+            --tag "$IMAGE:${{ github.sha }}" \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"

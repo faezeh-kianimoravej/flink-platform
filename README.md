@@ -129,6 +129,8 @@ The chart lives under `charts/flink-job/` and contains:
 
 The chart keeps platform deployment structure separate from application code. Tenant job repositories build and publish container images, while this platform chart defines how those images are deployed on Kubernetes.
 
+Reusable CI for tenant Flink job repositories is documented in [.github/workflows/README.md](.github/workflows/README.md).
+
 Validate the chart:
 
 ```bash
