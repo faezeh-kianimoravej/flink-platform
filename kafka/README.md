@@ -35,7 +35,7 @@ tenant-b
 Commands used to create and verify the namespace:
 
 ```bash
-kubectl apply -f kafka/kafka-system-namespace.yaml
+kubectl apply -f namespaces/kafka-system.yaml
 
 kubectl get namespace kafka-system --show-labels
 ```

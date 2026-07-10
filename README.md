@@ -1,322 +1,152 @@
 # Multi-Tenant Apache Flink Platform
 
-This repository represents the Platform Team for a master's thesis prototype. Its purpose is to provide a reusable GitOps-based deployment platform for Apache Flink applications running on Kubernetes.
+This repository is the platform repository for a master's thesis prototype around Apache Flink on Kubernetes. It contains the shared infrastructure and deployment configuration used to run tenant Flink jobs in a local Minikube cluster.
 
-Individual development teams own their own Flink job repositories, such as `tenant-a-flink-job` and `tenant-b-flink-job`. Those repositories contain the application source code, tests, Dockerfile, and CI pipeline for building Flink job container images.
+The project is split across three repositories:
 
-This repository contains the shared platform components used to deploy those jobs consistently across tenants. It is responsible for the common Kubernetes, Helm, and GitOps assets that connect tenant job images to the runtime platform.
+- `flink-platform`: this repository. It owns namespaces, RBAC, the shared Helm chart, Kafka resources, Argo CD Applications, and platform documentation.
+- `tenant-a-flink-job`: Tenant A job code, tests, Dockerfile, and CI image build.
+- `tenant-b-flink-job`: Tenant B job code, tests, Dockerfile, and CI image build.
 
-## Prototype Scope
+Tenant repositories build and publish job images. This repository decides how those images are deployed into Kubernetes.
 
-The prototype demonstrates:
+## Local Setup
 
-- A shared Kubernetes platform
-- GitOps deployment workflow
-- Multi-tenancy
-- Shared Helm chart
-- Argo CD
-- Flink Kubernetes Operator
-- Tenant isolation using Kubernetes namespaces
+For the complete step-by-step guide to deploy and run the platform locally, see:
 
-The prototype uses two example tenants:
+[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)
 
-- `tenant-a`
-- `tenant-b`
-
-The goal is to keep the platform understandable and suitable for a local thesis prototype. Production-grade features such as secret management, certificate automation, network policies, and advanced observability can be added in later phases.
-
-## Local Kubernetes Cluster
-
-The prototype uses a dedicated Minikube cluster so that the platform can be tested locally without affecting any other Kubernetes environment.
-
-Create the local cluster with:
-
-```bash
-minikube start --profile flink-platform-demo --cpus=4 --memory=8192 --driver=docker
-```
-
-Use the same profile for later Minikube commands:
-
-```bash
-minikube status --profile flink-platform-demo
-```
-
-If needed, switch `kubectl` to the Minikube context:
-
-```bash
-kubectl config use-context flink-platform-demo
-```
-
-# Namespace Provisioning
-
-The first completed platform implementation step is namespace provisioning. The platform repository manages Kubernetes namespaces declaratively as code.
-
-Instead of creating namespaces manually with:
-
-```bash
-kubectl create namespace ...
-```
-
-the platform defines namespace resources as Kubernetes manifests stored under:
+## Repository Structure
 
 ```text
-namespaces/
-  platform-system.yaml
-  tenant-a.yaml
-  tenant-b.yaml
+flink-platform/
+  .github/workflows/
+  argocd/
+  charts/flink-job/
+  docs/
+  kafka/
+  namespaces/
+  operator/
+  rbac/
+  tenants/
+  README.md
 ```
 
-These manifests define:
+The root README is the project overview. The detailed component notes are kept close to the manifests they describe:
 
-- `platform-system` for platform components such as Argo CD and the Flink Kubernetes Operator
-- `tenant-a` for Tenant A Flink jobs
-- `tenant-b` for Tenant B Flink jobs
+- [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for running the full local prototype
+- [operator/README.md](operator/README.md) for the Flink Kubernetes Operator
+- [argocd/README.md](argocd/README.md) for Argo CD
+- [kafka/README.md](kafka/README.md) for Kafka, Strimzi, topics, and users
+- [rbac/README.md](rbac/README.md) for tenant RBAC
+- [.github/workflows/README.md](.github/workflows/README.md) for the reusable tenant CI workflow
 
-This follows the Infrastructure as Code and GitOps approach because namespace definitions are version-controlled, reviewable, and reproducible. In later phases, Argo CD can synchronize these manifests into the cluster automatically.
+## Main Platform Components
 
-Apply the namespaces:
+The prototype uses:
 
-```bash
-kubectl apply -f namespaces/
-```
+- Minikube as the local Kubernetes runtime
+- namespaces for `platform-system`, `kafka-system`, `tenant-a`, and `tenant-b`
+- the Flink Kubernetes Operator for reconciling `FlinkDeployment` resources
+- Argo CD for GitOps deployment of tenant Flink jobs
+- Strimzi for the local Kafka cluster, topics, SCRAM users, and ACLs
+- a shared Helm chart in `charts/flink-job/`
+- tenant-specific values under `tenants/`
 
-Inspect the created namespaces:
+The `kafka-system` namespace is defined with the other namespace manifests in `namespaces/kafka-system.yaml`.
 
-```bash
-kubectl get namespaces
-kubectl get namespace tenant-a --show-labels
-kubectl get namespace tenant-b --show-labels
-```
+## Namespaces and Tenant Isolation
 
-## Tenant Onboarding
+Namespaces are declared in `namespaces/`:
 
-Tenant onboarding is managed declaratively from this platform repository. Namespace creation and RBAC are applied together during tenant onboarding:
+- `platform-system` for Argo CD and the Flink Kubernetes Operator
+- `kafka-system` for Strimzi and the local Kafka cluster
+- `tenant-a` for Tenant A workloads
+- `tenant-b` for Tenant B workloads
 
-```bash
-kubectl apply -f namespaces/ -f rbac/
-```
+Tenant RBAC is stored in `rbac/`. The Flink Kubernetes Operator runs centrally in `platform-system`, but it receives namespace-scoped permissions for each tenant. This lets the operator manage Flink workloads without giving tenants access to each other's Kubernetes resources.
 
-Tenant RBAC is documented in [rbac/README.md](rbac/README.md).
-
-## Flink Kubernetes Operator
-
-The Flink Kubernetes Operator is a shared platform component installed in the `platform-system` namespace. Installation and verification are documented in [operator/README.md](operator/README.md).
-
-## Argo CD
-
-Argo CD is the GitOps controller for the platform and runs in the `platform-system` namespace. Installation, UI access, login, and GitOps repository usage are documented in [argocd/README.md](argocd/README.md).
-
-## Kafka Messaging Layer
-
-Kafka is the shared messaging layer for tenant Flink jobs. The local Kafka setup guide is documented in [kafka/README.md](kafka/README.md).
-
-Kafka access is authenticated with Strimzi SCRAM-SHA-512 users and authorized with Strimzi simple authorization ACLs. The platform stores only non-secret access intent in Git:
-
-```text
-kafka/users/
-tenants/*/*-values.yaml
-```
-
-Strimzi generates the actual Kafka credentials as Kubernetes Secrets in the tenant namespaces. The shared Helm chart injects the selected Secret into the Flink pods with environment variables, so tenant applications can construct the Kafka SASL client configuration without hardcoding passwords.
+Kafka access is handled separately from Kubernetes RBAC. The prototype uses Strimzi SCRAM-SHA-512 users and Kafka ACLs to keep Tenant A and Tenant B on their own topics.
 
 ## Shared Helm Chart
 
-The shared Helm chart is owned by the Platform Team. It provides a reusable `FlinkDeployment` template for all tenant Flink jobs, using the Apache Flink Kubernetes Operator custom resource.
-
-The relationship is:
+The shared chart in `charts/flink-job/` renders a `FlinkDeployment` for each tenant:
 
 ```text
-shared Helm chart + tenant-specific values = tenant-specific FlinkDeployment
+shared Helm chart + tenant values = tenant FlinkDeployment
 ```
 
-The chart lives under `charts/flink-job/` and contains:
+Tenant values set the namespace, image, job class, JAR URI, Kafka topics, consumer group, checkpoint interval, and Kafka credential Secret.
 
-- `Chart.yaml` with the chart metadata
-- `values.yaml` with demo-friendly default values
-- `templates/flinkdeployment.yaml` for the rendered FlinkDeployment resource
-- `templates/_helpers.tpl` for chart naming helpers
-
-The chart keeps platform deployment structure separate from application code. Tenant job repositories build and publish container images, while this platform chart defines how those images are deployed on Kubernetes.
-
-Reusable CI for tenant Flink job repositories is documented in [.github/workflows/README.md](.github/workflows/README.md).
-
-Validate the chart:
+Useful local checks:
 
 ```bash
 helm lint charts/flink-job
-```
-
-Render the chart with default values:
-
-```bash
-helm template tenant-a charts/flink-job
-```
-
-Render the chart with Tenant A values:
-
-```bash
-helm template tenant-a charts/flink-job -f tenants/tenant-a/dev-values.yaml
-```
-
-## Tenant-Specific Values
-
-The shared Helm chart is combined with tenant-specific values to render separate `FlinkDeployment` resources for each tenant and environment.
-
-```text
-charts/flink-job + tenants/tenant-a/dev-values.yaml = Tenant A development FlinkDeployment
-charts/flink-job + tenants/tenant-b/dev-values.yaml = Tenant B development FlinkDeployment
-```
-
-Tenant values live under `tenants/`:
-
-```text
-tenants/
-  tenant-a/
-    dev-values.yaml
-    test-values.yaml
-    prod-values.yaml
-  tenant-b/
-    dev-values.yaml
-    test-values.yaml
-    prod-values.yaml
-```
-
-Each values file overrides the shared defaults for the tenant name, namespace, image, Flink job class, JAR URI, parallelism, Kafka topics, consumer group, and checkpoint interval.
-
-Each values file also selects the Kafka credential Secret and records non-secret governance metadata:
-
-```yaml
-kafka:
-  security:
-    protocol: SASL_PLAINTEXT
-    saslMechanism: SCRAM-SHA-512
-    userSecretName: tenant-a-flink-user
-governance:
-  applicationId: APP-TENANT-A
-  ownerTeam: tenant-a
-  kafkaUser: tenant-a-flink-user
-```
-
-Render the development deployments:
-
-```bash
 helm template tenant-a-dev charts/flink-job -f tenants/tenant-a/dev-values.yaml
 helm template tenant-b-dev charts/flink-job -f tenants/tenant-b/dev-values.yaml
 ```
 
-Optional test renders:
+## Kafka Security
 
-```bash
-helm template tenant-a-test charts/flink-job -f tenants/tenant-a/test-values.yaml
-helm template tenant-b-test charts/flink-job -f tenants/tenant-b/test-values.yaml
-```
+Kafka is managed through Strimzi resources in `kafka/`. The local Kafka cluster uses:
 
-Optional production renders:
+- SCRAM-SHA-512 authentication
+- Strimzi simple authorization
+- tenant-specific `KafkaTopic` resources
+- tenant-specific `KafkaUser` resources
 
-```bash
-helm template tenant-a-prod charts/flink-job -f tenants/tenant-a/prod-values.yaml
-helm template tenant-b-prod charts/flink-job -f tenants/tenant-b/prod-values.yaml
-```
+Tenant A uses `tenant-a-orders` and `tenant-a-customers` as input topics, `tenant-a-enriched-orders` as the output topic, and `tenant-a-flink-user` as the normal Kafka user.
 
-## Kafka Authorization Demo
+Tenant B uses `tenant-b-orders` and `tenant-b-products` as input topics, `tenant-b-enriched-orders` as the output topic, and `tenant-b-flink-user` as the normal Kafka user.
 
-Positive scenario:
+Strimzi generates the actual SCRAM credential Secrets in the tenant namespaces. The generated Secrets are not committed to Git.
 
-```bash
-kubectl apply -f namespaces/ -f rbac/
-kubectl apply -f kafka/kafka-system-namespace.yaml
-kubectl apply -f kafka/kafka-cluster.yaml
-kubectl apply -f kafka/topics/
-kubectl apply -f kafka/users/
-argocd app sync tenant-a-flink-job
-argocd app sync tenant-b-flink-job
-kubectl get flinkdeployment -A
-```
+## Argo CD and GitOps
 
-Expected result: both tenant jobs use their valid KafkaUser Secrets, read their own input topics, write their own enriched output topics, and cannot access the other tenant's topics.
+Argo CD runs in `platform-system`. The Application manifests in `argocd/` point at this repository and render `charts/flink-job` with tenant-specific values:
 
-Negative scenario:
+- `argocd/tenant-a-flink-job.yaml`
+- `argocd/tenant-b-flink-job.yaml`
 
-```bash
-# Tenant A example
-# Change tenants/tenant-a/dev-values.yaml:
-# kafka.security.userSecretName: tenant-a-restricted-user
-# governance.kafkaUser: tenant-a-restricted-user
-git add tenants/tenant-a/dev-values.yaml
-git commit -m "Use restricted Kafka user for tenant-a demo"
-git push
-argocd app sync tenant-a-flink-job
-kubectl logs -n tenant-a -l app=tenant-a-flink-job,component=taskmanager --tail=200
-```
-
-Expected result: authentication succeeds and input reads are allowed, but writes to `tenant-a-enriched-orders` fail with a Kafka `TopicAuthorizationException`. Restore `tenant-a-flink-user` in another Git commit and sync again.
-
-Tenant B follows the same flow with `tenant-b-restricted-user` and `tenant-b-enriched-orders`.
+Both applications set `CreateNamespace=false`, so namespace creation is handled explicitly by the bootstrap manifests in `namespaces/`.
 
 ## Platform Responsibilities
 
-The Platform Team is responsible for the shared deployment foundation:
+The Platform Team owns this repository:
 
-- Kubernetes namespace definitions for each tenant
-- Tenant-level RBAC needed by the platform components
-- A reusable Helm chart for Flink job deployments
-- Argo CD Application definitions
-- GitOps values files that select image versions and runtime configuration
-- Integration with the Flink Kubernetes Operator
+- namespace manifests
+- RBAC manifests
+- shared Helm chart
+- Kafka platform resources
+- Argo CD Application manifests
+- tenant deployment values
 
-The Platform Team does not own the Flink job implementation itself. Job code and image builds stay in the tenant application repositories.
+The platform repository does not own the Flink job implementation itself. Job code and image builds stay in the tenant application repositories.
 
 ## Application Team Responsibilities
 
-Each application team owns its own Flink job repository. For this prototype, the example job repositories are:
-
-- `tenant-a-flink-job`
-- `tenant-b-flink-job`
-
-Application teams are responsible for:
+Application teams own their tenant job repositories:
 
 - Flink job source code
-- Job-specific tests
-- Docker image builds
+- tests
+- Dockerfiles
 - CI pipelines
-- Publishing versioned job images
-- Requesting or proposing GitOps values updates when a new image should be deployed
+- published GHCR images
 
-## Target Deployment Flow
+The boundary is simple: tenant repositories produce images; this repository deploys them.
 
-The platform is designed around the following flow:
+## Deployment Flow
 
 ```text
 tenant job repository
   -> CI pipeline
-  -> container image
-  -> GitOps values update
+  -> GHCR image
+  -> tenant values update in flink-platform
   -> Argo CD
   -> shared Helm chart
   -> FlinkDeployment
   -> Flink Kubernetes Operator
-  -> tenant namespace
+  -> running tenant job
 ```
 
-This separation keeps application delivery and platform operations clear. Development teams produce deployable Flink job images, while the platform repository controls how those images are deployed into the shared Kubernetes platform.
-
-## Initial Repository Layout
-
-The repository is expected to evolve toward this structure:
-
-```text
-flink-platform/
-  charts/
-    flink-job/
-  tenants/
-    tenant-a/
-    tenant-b/
-  namespaces/
-  rbac/
-  operator/
-  kafka/
-  argocd/
-  README.md
-```
-
-The initial implementation should remain simple and educational. The purpose is to demonstrate the platform architecture and GitOps workflow, not to create a complete production platform.
+The reusable CI workflow for tenant repositories is stored under `.github/workflows/`. See [.github/workflows/README.md](.github/workflows/README.md).

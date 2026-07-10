@@ -3,8 +3,6 @@ namespace: demo-tenant
 
 image:
   repository: ghcr.io/faezeh-kianimoravej/flink-demo-job
-  # GitOps deployments should pin this to the immutable tenant CI image tag
-  # produced from github.sha, for example: 3f1c392f408a9a3813ef3b9fc3df134e0c8393f9.
   tag: TODO_REPLACE_WITH_TENANT_COMMIT_SHA
   pullPolicy: IfNotPresent
 
