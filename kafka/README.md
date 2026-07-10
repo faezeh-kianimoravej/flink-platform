@@ -116,11 +116,12 @@ The manifest uses KRaft mode with:
 - one controller node pool
 - one broker node pool
 - ephemeral storage
-- one internal plain listener on port `9092`
+- one internal listener named `plain` on port `9092`
 - TLS disabled
 - no external listener
-- no listener authentication
-- the Strimzi Topic Operator enabled
+- SCRAM-SHA-512 listener authentication
+- Strimzi simple authorization
+- the Strimzi Topic Operator and User Operator enabled
 
 Kafka topics are not created by this manifest. Tenant topics will be added separately after the shared cluster is running.
 
@@ -184,6 +185,71 @@ Verify the topic resources:
 kubectl get kafkatopic -n kafka-system
 ```
 
+# Kafka Authentication and Authorization
+
+Kafka client access is managed with Strimzi `KafkaUser` resources in:
+
+```text
+kafka/users/
+```
+
+The User Operator watches tenant namespaces and generates SCRAM credentials as Kubernetes Secrets in the same namespace as each `KafkaUser`. Generated Secrets are never committed to Git.
+
+Apply Kafka auth resources:
+
+```bash
+kubectl apply -f rbac/strimzi-user-operator-tenant-rbac.yaml
+kubectl apply -f kafka/kafka-cluster.yaml
+kubectl apply -f kafka/users/
+```
+
+Generated Secret names:
+
+```text
+tenant-a/tenant-a-flink-user
+tenant-a/tenant-a-restricted-user
+tenant-b/tenant-b-flink-user
+tenant-b/tenant-b-restricted-user
+```
+
+ACL summary:
+
+```text
+tenant-a-flink-user:
+  read/describe tenant-a-orders, tenant-a-customers
+  write/describe tenant-a-enriched-orders
+  read/describe groups tenant-a-flink-job, tenant-a-flink-job-customers
+
+tenant-a-restricted-user:
+  read/describe tenant-a-orders, tenant-a-customers
+  read/describe groups tenant-a-flink-job, tenant-a-flink-job-customers
+  no write access to tenant-a-enriched-orders
+
+tenant-b-flink-user:
+  read/describe tenant-b-orders, tenant-b-products
+  write/describe tenant-b-enriched-orders
+  read/describe groups tenant-b-flink-job, tenant-b-flink-job-products
+
+tenant-b-restricted-user:
+  read/describe tenant-b-orders, tenant-b-products
+  read/describe groups tenant-b-flink-job, tenant-b-flink-job-products
+  no write access to tenant-b-enriched-orders
+```
+
+The Helm values for each tenant select the Secret with:
+
+```yaml
+kafka:
+  security:
+    userSecretName: tenant-a-flink-user
+governance:
+  applicationId: APP-TENANT-A
+  ownerTeam: tenant-a
+  kafkaUser: tenant-a-flink-user
+```
+
+For the negative authorization demo, change only `kafka.security.userSecretName` and `governance.kafkaUser` to the restricted user for that tenant, commit the platform change, and let Argo CD sync the `FlinkDeployment`.
+
 # Data Flow
 
 Tenant A:
@@ -214,9 +280,9 @@ Kubernetes RBAC only controls access to Kubernetes resources such as namespaces,
 
 Kafka topic permissions are separate.
 
-For this prototype, tenant separation is represented using dedicated Kafka topics. Tenant A uses `tenant-a-*` topics, and Tenant B uses `tenant-b-*` topics.
+For this prototype, tenant separation is enforced with Strimzi SCRAM users and Kafka ACLs. Tenant A uses `tenant-a-*` topics and Tenant B uses `tenant-b-*` topics. Cross-tenant reads and writes are denied by Kafka authorization.
 
-In production, topic-level permissions would normally be enforced through Kafka ACLs or the enterprise messaging platform.
+In production, these ACLs could be managed by the enterprise messaging platform, but the GitOps model remains the same: non-secret desired access is in Git, generated credentials stay in Kubernetes Secrets.
 
 # Current Progress
 
@@ -225,8 +291,13 @@ In production, topic-level permissions would normally be enforced through Kafka 
 - Kafka CRD verification documented
 - Local Kafka cluster manifest created
 - Tenant Kafka topic manifests created
+- SCRAM-SHA-512 listener authentication configured
+- Strimzi simple authorization configured
+- Tenant KafkaUser manifests and ACLs created
+- Restricted demo users created
 
 # Next Steps
 
-- Connect tenant-a Flink job to Kafka
-- Connect tenant-b Flink job to Kafka
+- Rebuild tenant images after Kafka client authentication support changes
+- Update tenant image tags in `tenants/*/dev-values.yaml`
+- Validate positive and negative authorization scenarios through Argo CD

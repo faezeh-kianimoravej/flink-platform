@@ -110,6 +110,15 @@ Argo CD is the GitOps controller for the platform and runs in the `platform-syst
 
 Kafka is the shared messaging layer for tenant Flink jobs. The local Kafka setup guide is documented in [kafka/README.md](kafka/README.md).
 
+Kafka access is authenticated with Strimzi SCRAM-SHA-512 users and authorized with Strimzi simple authorization ACLs. The platform stores only non-secret access intent in Git:
+
+```text
+kafka/users/
+tenants/*/*-values.yaml
+```
+
+Strimzi generates the actual Kafka credentials as Kubernetes Secrets in the tenant namespaces. The shared Helm chart injects the selected Secret into the Flink pods with environment variables, so tenant applications can construct the Kafka SASL client configuration without hardcoding passwords.
+
 ## Shared Helm Chart
 
 The shared Helm chart is owned by the Platform Team. It provides a reusable `FlinkDeployment` template for all tenant Flink jobs, using the Apache Flink Kubernetes Operator custom resource.
@@ -174,6 +183,20 @@ tenants/
 
 Each values file overrides the shared defaults for the tenant name, namespace, image, Flink job class, JAR URI, parallelism, Kafka topics, consumer group, and checkpoint interval.
 
+Each values file also selects the Kafka credential Secret and records non-secret governance metadata:
+
+```yaml
+kafka:
+  security:
+    protocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-512
+    userSecretName: tenant-a-flink-user
+governance:
+  applicationId: APP-TENANT-A
+  ownerTeam: tenant-a
+  kafkaUser: tenant-a-flink-user
+```
+
 Render the development deployments:
 
 ```bash
@@ -194,6 +217,41 @@ Optional production renders:
 helm template tenant-a-prod charts/flink-job -f tenants/tenant-a/prod-values.yaml
 helm template tenant-b-prod charts/flink-job -f tenants/tenant-b/prod-values.yaml
 ```
+
+## Kafka Authorization Demo
+
+Positive scenario:
+
+```bash
+kubectl apply -f namespaces/ -f rbac/
+kubectl apply -f kafka/kafka-system-namespace.yaml
+kubectl apply -f kafka/kafka-cluster.yaml
+kubectl apply -f kafka/topics/
+kubectl apply -f kafka/users/
+argocd app sync tenant-a-flink-job
+argocd app sync tenant-b-flink-job
+kubectl get flinkdeployment -A
+```
+
+Expected result: both tenant jobs use their valid KafkaUser Secrets, read their own input topics, write their own enriched output topics, and cannot access the other tenant's topics.
+
+Negative scenario:
+
+```bash
+# Tenant A example
+# Change tenants/tenant-a/dev-values.yaml:
+# kafka.security.userSecretName: tenant-a-restricted-user
+# governance.kafkaUser: tenant-a-restricted-user
+git add tenants/tenant-a/dev-values.yaml
+git commit -m "Use restricted Kafka user for tenant-a demo"
+git push
+argocd app sync tenant-a-flink-job
+kubectl logs -n tenant-a -l app=tenant-a-flink-job,component=taskmanager --tail=200
+```
+
+Expected result: authentication succeeds and input reads are allowed, but writes to `tenant-a-enriched-orders` fail with a Kafka `TopicAuthorizationException`. Restore `tenant-a-flink-user` in another Git commit and sync again.
+
+Tenant B follows the same flow with `tenant-b-restricted-user` and `tenant-b-enriched-orders`.
 
 ## Platform Responsibilities
 

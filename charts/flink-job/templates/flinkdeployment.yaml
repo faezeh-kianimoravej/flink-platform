@@ -5,12 +5,36 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "flink-job.labels" . | nindent 4 }}
+    platform.example.com/application-id: {{ .Values.governance.applicationId | quote }}
+    platform.example.com/owner-team: {{ .Values.governance.ownerTeam | quote }}
+    platform.example.com/kafka-user: {{ .Values.governance.kafkaUser | quote }}
 spec:
   image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
   imagePullPolicy: {{ .Values.image.pullPolicy }}
   flinkVersion: {{ .Values.flinkVersion }}
   serviceAccount: {{ .Values.serviceAccount }}
   restartNonce: {{ .Values.job.restartNonce }}
+  {{- if .Values.kafka.security.enabled }}
+  podTemplate:
+    spec:
+      containers:
+        - name: flink-main-container
+          env:
+            - name: KAFKA_SECURITY_PROTOCOL
+              value: {{ .Values.kafka.security.protocol | quote }}
+            - name: KAFKA_SASL_MECHANISM
+              value: {{ .Values.kafka.security.saslMechanism | quote }}
+            - name: KAFKA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafka.security.userSecretName | quote }}
+                  key: {{ .Values.kafka.security.usernameKey | quote }}
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafka.security.userSecretName | quote }}
+                  key: {{ .Values.kafka.security.passwordKey | quote }}
+  {{- end }}
   flinkConfiguration:
     pipeline.name: "{{ .Values.tenantName }}-flink-job"
     taskmanager.numberOfTaskSlots: "{{ .Values.job.parallelism }}"
@@ -20,6 +44,11 @@ spec:
     prototype.kafka.input.topics: {{ join "," .Values.kafka.inputTopics | quote }}
     prototype.kafka.output.topic: {{ .Values.kafka.outputTopic | quote }}
     prototype.kafka.consumer.group.id: {{ .Values.kafka.consumerGroupId | quote }}
+    prototype.kafka.security.protocol: {{ .Values.kafka.security.protocol | quote }}
+    prototype.kafka.sasl.mechanism: {{ .Values.kafka.security.saslMechanism | quote }}
+    prototype.governance.application.id: {{ .Values.governance.applicationId | quote }}
+    prototype.governance.owner.team: {{ .Values.governance.ownerTeam | quote }}
+    prototype.governance.kafka.user: {{ .Values.governance.kafkaUser | quote }}
   jobManager:
     resource:
       cpu: {{ .Values.jobManager.resource.cpu }}
@@ -44,4 +73,9 @@ spec:
       - "--products.input.topic={{ index .Values.kafka.inputTopics 1 }}"
       - "--output.topic={{ .Values.kafka.outputTopic }}"
       - "--consumer.group.id={{ .Values.kafka.consumerGroupId }}"
+      - "--kafka.security.protocol={{ .Values.kafka.security.protocol }}"
+      - "--kafka.sasl.mechanism={{ .Values.kafka.security.saslMechanism }}"
+      - "--platform.application.id={{ .Values.governance.applicationId }}"
+      - "--owner.team={{ .Values.governance.ownerTeam }}"
+      - "--kafka.user={{ .Values.governance.kafkaUser }}"
       - "--checkpoint.interval={{ .Values.checkpointing.interval }}"

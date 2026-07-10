@@ -22,6 +22,18 @@ kafka:
     - tenant-a-customers
   outputTopic: tenant-a-enriched-orders
   consumerGroupId: tenant-a-flink-job
+  security:
+    enabled: true
+    protocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-512
+    userSecretName: tenant-a-flink-user
+    usernameKey: username
+    passwordKey: password
+
+governance:
+  applicationId: APP-TENANT-A
+  ownerTeam: tenant-a
+  kafkaUser: tenant-a-flink-user
 
 checkpointing:
   interval: 120s

@@ -37,6 +37,18 @@ kafka:
     - demo-customers
   outputTopic: demo-enriched-orders
   consumerGroupId: demo-flink-job
+  security:
+    enabled: true
+    protocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-512
+    userSecretName: demo-flink-user
+    usernameKey: username
+    passwordKey: password
+
+governance:
+  applicationId: APP-DEMO
+  ownerTeam: demo-tenant
+  kafkaUser: demo-flink-user
 
 checkpointing:
   interval: 30s
