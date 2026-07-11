@@ -3,7 +3,7 @@ namespace: tenant-a
 
 image:
   repository: ghcr.io/faezeh-kianimoravej/tenant-a-flink-job
-  tag: 21376fcf70d31c0f41679066eaa4ca6cea1cd52e
+  tag: ef2b4d7c74321ebe3a735726e4932d19ad29aed7
   pullPolicy: IfNotPresent
 
 flinkVersion: v2_2
