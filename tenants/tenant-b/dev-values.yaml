@@ -27,8 +27,8 @@ kafka:
     enabled: true
     protocol: SASL_PLAINTEXT
     saslMechanism: SCRAM-SHA-512
+    username: tenant-b-flink-user
     userSecretName: tenant-b-flink-user
-    usernameKey: username
     passwordKey: password
 
 governance:

@@ -25,10 +25,7 @@ spec:
             - name: KAFKA_SASL_MECHANISM
               value: {{ .Values.kafka.security.saslMechanism | quote }}
             - name: KAFKA_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.kafka.security.userSecretName | quote }}
-                  key: {{ .Values.kafka.security.usernameKey | quote }}
+              value: {{ default .Values.governance.kafkaUser .Values.kafka.security.username | quote }}
             - name: KAFKA_PASSWORD
               valueFrom:
                 secretKeyRef:
