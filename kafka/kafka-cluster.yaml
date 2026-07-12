@@ -67,3 +67,4 @@ spec:
       auto.create.topics.enable: "false"
   entityOperator:
     topicOperator: {}
+    userOperator: {}
