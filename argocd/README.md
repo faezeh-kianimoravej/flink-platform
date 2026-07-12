@@ -32,27 +32,27 @@ Running Flink Job
 Argo CD is installed in:
 
 ```text
-platform-system
+argocd
 ```
 
-The `platform-system` namespace is used for shared platform components, including Argo CD and the Flink Kubernetes Operator.
+The `argocd` namespace is used for Argo CD. The Flink Kubernetes Operator runs separately in `platform-system`.
 
 ## Installation
 
-Install Argo CD into the `platform-system` namespace with:
+Install Argo CD into the `argocd` namespace with:
 
 ```bash
-kubectl apply -n platform-system -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
 This command applies the standard Argo CD installation manifests to the cluster. It installs the Argo CD controllers, API server, repository server, Redis component, services, service accounts, RBAC rules, and custom resource definitions needed to manage Argo CD `Application` resources.
 
 ## Verification
 
-Verify that the Argo CD pods are created in the `platform-system` namespace:
+Verify that the Argo CD pods are created in the `argocd` namespace:
 
 ```bash
-kubectl get pods -n platform-system
+kubectl get pods -n argocd
 ```
 
 All Argo CD components should eventually reach the `Running` state. During startup, some pods may briefly appear as `Pending`, `ContainerCreating`, or `Init` before becoming ready.
@@ -62,7 +62,7 @@ All Argo CD components should eventually reach the `Running` state. During start
 Forward the local port `8080` to the Argo CD server service:
 
 ```bash
-kubectl port-forward svc/argocd-server -n platform-system 8080:443
+kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
 The Argo CD UI is available at:
@@ -85,7 +85,7 @@ Use the following PowerShell command to retrieve the initial admin password:
 
 ```powershell
 kubectl get secret argocd-initial-admin-secret `
-  -n platform-system `
+  -n argocd `
   -o jsonpath="{.data.password}" |
 ForEach-Object {
     [System.Text.Encoding]::UTF8.GetString(
@@ -138,5 +138,5 @@ The tenant Applications configure `ignoreDifferences` for `FlinkDeployment` meta
 Verify that Argo CD has registered the Applications:
 
 ```bash
-kubectl get applications -n platform-system
+kubectl get applications -n argocd
 ```

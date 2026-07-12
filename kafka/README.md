@@ -19,6 +19,8 @@ The intended namespace layout is:
 ```text
 platform-system
 - Flink Kubernetes Operator
+
+argocd
 - Argo CD
 
 kafka-system
@@ -122,7 +124,7 @@ The manifest uses KRaft mode with:
 - SCRAM-SHA-512 listener authentication
 - Strimzi simple authorization
 - the Strimzi Topic Operator enabled
-- standalone tenant User Operators deployed from `rbac/strimzi-user-operator-tenant-rbac.yaml`
+- the Strimzi User Operator enabled
 
 Kafka topics are not created by this manifest. Tenant topics will be added separately after the shared cluster is running.
 
@@ -194,30 +196,63 @@ Kafka client access is managed with Strimzi `KafkaUser` resources in:
 kafka/users/
 ```
 
-The embedded Strimzi User Operator is intentionally disabled in `kafka/kafka-cluster.yaml`. Tenant users are reconciled by the standalone User Operator deployments in `rbac/strimzi-user-operator-tenant-rbac.yaml`.
+The Strimzi User Operator is enabled in `kafka/kafka-cluster.yaml` as part of the Kafka cluster Entity Operator:
 
-Each standalone User Operator watches one tenant namespace, uses a tenant-specific `STRIMZI_LABELS` selector, and ignores the other tenant's Kafka usernames with `STRIMZI_IGNORED_USERS_PATTERN`. This prevents two User Operators from competing over the same Kafka-side SCRAM credentials or ACLs. Generated Secrets are created in the same namespace as each `KafkaUser` and are never committed to Git.
+```yaml
+entityOperator:
+  topicOperator: {}
+  userOperator: {}
+```
+
+Because the Kafka cluster runs in `kafka-system`, the embedded User Operator reconciles `KafkaUser` resources only in `kafka-system`. Do not create duplicate `KafkaUser` resources in `tenant-a` or `tenant-b`; those tenant-namespace resources are not watched by this User Operator and will not create tenant-local credentials. Tenant isolation is enforced by Kafka ACLs and tenant-specific names, not by duplicating KafkaUser custom resources across namespaces.
+
+The generated SCRAM credential Secrets are created in the same namespace as each `KafkaUser` and are never committed to Git.
 
 Apply Kafka auth resources:
 
-```bash
-kubectl apply -f rbac/strimzi-user-operator-tenant-rbac.yaml
+```powershell
 kubectl apply -f kafka/kafka-cluster.yaml
 kubectl apply -f kafka/users/
+kubectl get kafkauser -n kafka-system
 ```
 
 Generated Secret names:
 
 ```text
-tenant-a/tenant-a-flink-user
-tenant-a/tenant-a-restricted-user
-tenant-b/tenant-b-flink-user
-tenant-b/tenant-b-restricted-user
+kafka-system/tenant-a-flink-user
+kafka-system/tenant-a-restricted-user
+kafka-system/tenant-b-flink-user
+kafka-system/tenant-b-restricted-user
+```
+
+## Synchronizing KafkaUser Secrets for Flink
+
+Tenant Flink jobs run in `tenant-a` and `tenant-b`. Kubernetes `secretKeyRef` values are namespace-local, so a pod in `tenant-a` cannot read `kafka-system/tenant-a-flink-user` directly.
+
+For the local Minikube demo, synchronize only the normal workload credential Secrets from `kafka-system` into the corresponding tenant namespace:
+
+```text
+kafka-system/tenant-a-flink-user -> tenant-a/tenant-a-flink-user
+kafka-system/tenant-b-flink-user -> tenant-b/tenant-b-flink-user
+```
+
+This repository does not currently include a native secret synchronization controller such as External Secrets, a reflector, or the Secrets Store CSI driver. The PowerShell script is the local-demo bridge: it waits for the source Strimzi Secret, creates a clean destination Secret without owner references or cluster-owned metadata, preserves the Secret type and encoded data, uses server-side apply for idempotent updates, and never prints credential values.
+
+Production environments should use a platform-approved external secret synchronization mechanism rather than this local helper script.
+
+```powershell
+kubectl wait --for=condition=Ready kafkauser/tenant-a-flink-user -n kafka-system --timeout=120s
+kubectl wait --for=condition=Ready kafkauser/tenant-b-flink-user -n kafka-system --timeout=120s
+
+.\kafka\scripts\sync-kafka-user-secrets.ps1
+
+kubectl get secret tenant-a-flink-user -n tenant-a
+kubectl get secret tenant-b-flink-user -n tenant-b
 ```
 
 ## Local Kafka Client Properties
 
-Manual Kafka producer and consumer commands use `/tmp/tenant-a-client.properties` inside the Kafka broker pod. The file is generated from the `tenant-a-flink-user` Kubernetes Secret and is not created in the repository or on the local machine.
+Manual Kafka producer and consumer commands use `/tmp/tenant-a-client.properties` inside the Kafka broker pod. The file is generated from the `kafka-system/tenant-a-flink-user` Kubernetes Secret and is not created in the repository or on the local machine.
 
 The file contains runtime SCRAM credentials and is intentionally excluded from Git. Generate or refresh it inside the broker pod before manually producing test input messages or consuming enriched output messages:
 
@@ -263,7 +298,7 @@ governance:
   kafkaUser: tenant-a-flink-user
 ```
 
-For the negative authorization demo, change only `kafka.security.userSecretName` and `governance.kafkaUser` to the restricted user for that tenant, commit the platform change, and let Argo CD sync the `FlinkDeployment`.
+For the negative authorization demo, change only `kafka.security.userSecretName` and `governance.kafkaUser` to the restricted user for that tenant, synchronize that restricted Secret explicitly with `kafka/scripts/sync-kafka-user-secret.ps1`, commit the platform change, and let Argo CD sync the `FlinkDeployment`.
 
 # Data Flow
 

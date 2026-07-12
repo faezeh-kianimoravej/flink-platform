@@ -1,5 +1,5 @@
 param(
-    [string]$KafkaUserNamespace = "tenant-a",
+    [string]$KafkaUserNamespace = "kafka-system",
     [string]$SecretName = "tenant-a-flink-user",
     [string]$BrokerNamespace = "kafka-system",
     [string]$BrokerPodName = "flink-platform-kafka-broker-0",

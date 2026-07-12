@@ -2,7 +2,7 @@ apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
 metadata:
   name: tenant-b-flink-user
-  namespace: tenant-b
+  namespace: kafka-system
   labels:
     strimzi.io/cluster: flink-platform-kafka
     app.kubernetes.io/managed-by: flink-platform

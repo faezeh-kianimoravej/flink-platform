@@ -46,7 +46,7 @@ The root README is the project overview. The detailed component notes are kept c
 The prototype uses:
 
 - Minikube as the local Kubernetes runtime
-- namespaces for `platform-system`, `kafka-system`, `tenant-a`, and `tenant-b`
+- namespaces for `argocd`, `platform-system`, `kafka-system`, `tenant-a`, and `tenant-b`
 - the Flink Kubernetes Operator for reconciling `FlinkDeployment` resources
 - Argo CD for GitOps deployment of tenant Flink jobs
 - Strimzi for the local Kafka cluster, topics, SCRAM users, and ACLs
@@ -59,7 +59,8 @@ The `kafka-system` namespace is defined with the other namespace manifests in `n
 
 Namespaces are declared in `namespaces/`:
 
-- `platform-system` for Argo CD and the Flink Kubernetes Operator
+- `argocd` for Argo CD
+- `platform-system` for the Flink Kubernetes Operator
 - `kafka-system` for Strimzi and the local Kafka cluster
 - `tenant-a` for Tenant A workloads
 - `tenant-b` for Tenant B workloads
@@ -99,13 +100,13 @@ Tenant A uses `tenant-a-orders` and `tenant-a-customers` as input topics, `tenan
 
 Tenant B uses `tenant-b-orders` and `tenant-b-products` as input topics, `tenant-b-enriched-orders` as the output topic, and `tenant-b-flink-user` as the normal Kafka user.
 
-Strimzi generates the actual SCRAM credential Secrets in the tenant namespaces. The generated Secrets are not committed to Git.
+Strimzi generates the actual SCRAM credential Secrets in `kafka-system`, where the Kafka cluster and embedded User Operator run. The generated Secrets are not committed to Git.
 
-The Kafka custom resource keeps only the embedded Topic Operator enabled. Tenant `KafkaUser` resources are reconciled by standalone User Operator deployments in `rbac/`, scoped by namespace, tenant labels, and reciprocal ignored-user patterns so the operators do not compete over Kafka-side SCRAM credentials or ACLs.
+Tenant Flink jobs run in `tenant-a` and `tenant-b`, so the local Minikube demo synchronizes the normal workload KafkaUser Secrets into the corresponding tenant namespace for pod consumption without decoding or committing passwords. Production environments should use a platform-approved external secret synchronization mechanism.
 
 ## Argo CD and GitOps
 
-Argo CD runs in `platform-system`. The Application manifests in `argocd/` point at this repository and render `charts/flink-job` with tenant-specific values:
+Argo CD runs in `argocd`. The Application manifests in `argocd/` are created in that namespace, point at this repository, and render `charts/flink-job` with tenant-specific values:
 
 - `argocd/tenant-a-flink-job.yaml`
 - `argocd/tenant-b-flink-job.yaml`

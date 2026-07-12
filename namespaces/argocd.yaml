@@ -1,10 +1,9 @@
-# Namespace for shared platform components such as the Flink Kubernetes Operator.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: platform-system
+  name: argocd
   labels:
     app.kubernetes.io/managed-by: flink-platform
     app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/component: argocd
     platform.example.com/environment: local
-    platform.example.com/purpose: platform-components

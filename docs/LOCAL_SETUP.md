@@ -42,7 +42,7 @@ minikube status --profile flink-platform-demo
 
 ## 2. Create Namespaces
 
-All namespaces are declared under `namespaces/`, including `namespaces/kafka-system.yaml`. Argo CD Applications use `CreateNamespace=false`, so the namespaces must exist before the applications sync.
+All namespaces are declared under `namespaces/`, including `namespaces/argocd.yaml` and `namespaces/kafka-system.yaml`. Argo CD Applications use `CreateNamespace=false`, so the namespaces must exist before the applications sync.
 
 ```bash
 kubectl apply -f namespaces/
@@ -51,6 +51,7 @@ kubectl get namespaces
 
 Expected namespaces:
 
+- `argocd`
 - `platform-system`
 - `kafka-system`
 - `tenant-a`
@@ -85,16 +86,16 @@ helm status flink-kubernetes-operator -n platform-system
 
 ## 5. Install Argo CD
 
-Install Argo CD in `platform-system`:
+Install Argo CD in `argocd`:
 
 ```bash
-kubectl apply -n platform-system -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
 Verify it:
 
 ```bash
-kubectl get pods -n platform-system
+kubectl get pods -n argocd
 ```
 
 ## 6. Install Strimzi
@@ -116,7 +117,7 @@ kubectl get crds | findstr kafka
 
 ## 7. Apply RBAC
 
-The `rbac/` directory contains tenant RBAC for the Flink Kubernetes Operator and the standalone tenant Strimzi User Operators. Each tenant User Operator watches only its tenant namespace, selects only that tenant's `KafkaUser` labels, and ignores the other tenant's Kafka usernames.
+The `rbac/` directory contains tenant RBAC for the Flink Kubernetes Operator.
 
 ```bash
 kubectl apply -f rbac/
@@ -159,9 +160,12 @@ kubectl get kafkatopic -n kafka-system
 
 Deploy Kafka users:
 
-```bash
+```powershell
 kubectl apply -f kafka/users/
-kubectl get kafkauser -A
+kubectl get kafkauser -n kafka-system
+kubectl wait --for=condition=Ready kafkauser/tenant-a-flink-user -n kafka-system --timeout=120s
+kubectl wait --for=condition=Ready kafkauser/tenant-b-flink-user -n kafka-system --timeout=120s
+.\kafka\scripts\sync-kafka-user-secrets.ps1
 ```
 
 Kafka runs in `kafka-system`. Tenant Flink jobs connect to:
@@ -170,14 +174,17 @@ Kafka runs in `kafka-system`. Tenant Flink jobs connect to:
 flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092
 ```
 
-The embedded Kafka User Operator is disabled; standalone tenant User Operators create SCRAM credential Secrets in the tenant namespaces:
+The embedded Kafka User Operator runs with the Kafka cluster in `kafka-system`, so `KafkaUser` resources and their generated SCRAM credential Secrets are created there. Do not create duplicate `KafkaUser` resources in tenant namespaces. The local demo synchronizes only the normal workload Secrets into the tenant namespaces because the tenant Flink pods read their Kafka password from a namespace-local Secret:
 
 ```text
+kafka-system/tenant-a-flink-user
+kafka-system/tenant-b-flink-user
+
 tenant-a/tenant-a-flink-user
-tenant-a/tenant-a-restricted-user
 tenant-b/tenant-b-flink-user
-tenant-b/tenant-b-restricted-user
 ```
+
+The repository does not include a native secret synchronization controller such as External Secrets, a reflector, or the Secrets Store CSI driver. The PowerShell sync script is the local Minikube demo solution; production environments should use a platform-approved external secret synchronization mechanism.
 
 ## 9. Deploy Argo CD Applications
 
@@ -198,7 +205,7 @@ argocd app sync tenant-b-flink-job
 If you are not using the CLI, verify that Argo CD has registered the applications and let automated sync reconcile them:
 
 ```bash
-kubectl get applications -n platform-system
+kubectl get applications -n argocd
 ```
 
 ## 10. Verify the Runtime State
@@ -206,6 +213,7 @@ kubectl get applications -n platform-system
 Check namespaces:
 
 ```bash
+kubectl get namespace argocd --show-labels
 kubectl get namespace platform-system --show-labels
 kubectl get namespace kafka-system --show-labels
 kubectl get namespace tenant-a --show-labels
@@ -217,7 +225,7 @@ Check Kafka resources:
 ```bash
 kubectl get kafka -n kafka-system
 kubectl get kafkatopic -n kafka-system
-kubectl get kafkauser -A
+kubectl get kafkauser -n kafka-system
 kubectl get pods -n kafka-system
 kubectl get svc -n kafka-system
 ```
@@ -226,15 +234,17 @@ Check generated KafkaUser Secrets:
 
 ```bash
 kubectl get secret tenant-a-flink-user -n tenant-a
-kubectl get secret tenant-a-restricted-user -n tenant-a
 kubectl get secret tenant-b-flink-user -n tenant-b
-kubectl get secret tenant-b-restricted-user -n tenant-b
+kubectl get secret tenant-a-flink-user -n kafka-system
+kubectl get secret tenant-a-restricted-user -n kafka-system
+kubectl get secret tenant-b-flink-user -n kafka-system
+kubectl get secret tenant-b-restricted-user -n kafka-system
 ```
 
 Check Argo CD and Flink:
 
 ```bash
-kubectl get applications -n platform-system
+kubectl get applications -n argocd
 kubectl get flinkdeployment -A
 kubectl get pods -n tenant-a
 kubectl get pods -n tenant-b
@@ -254,7 +264,7 @@ kubectl get flinkdeployment tenant-b-flink-job -n tenant-b -o jsonpath="{.status
 Open Argo CD:
 
 ```bash
-kubectl port-forward svc/argocd-server -n platform-system 8080:443
+kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
 Then open:
@@ -267,7 +277,7 @@ The default username is `admin`. Retrieve the initial password with PowerShell:
 
 ```powershell
 kubectl get secret argocd-initial-admin-secret `
-  -n platform-system `
+  -n argocd `
   -o jsonpath="{.data.password}" |
 ForEach-Object {
     [System.Text.Encoding]::UTF8.GetString(
@@ -306,12 +316,15 @@ This repository does not include Kubernetes Dashboard setup.
 
 Positive scenario:
 
-```bash
+```powershell
 kubectl apply -f namespaces/
 kubectl apply -f rbac/
 kubectl apply -f kafka/kafka-cluster.yaml
 kubectl apply -f kafka/topics/
 kubectl apply -f kafka/users/
+kubectl wait --for=condition=Ready kafkauser/tenant-a-flink-user -n kafka-system --timeout=120s
+kubectl wait --for=condition=Ready kafkauser/tenant-b-flink-user -n kafka-system --timeout=120s
+.\kafka\scripts\sync-kafka-user-secrets.ps1
 argocd app sync tenant-a-flink-job
 argocd app sync tenant-b-flink-job
 kubectl get flinkdeployment -A
@@ -325,6 +338,7 @@ Negative scenario for Tenant A:
 # Change tenants/tenant-a/dev-values.yaml:
 # kafka.security.userSecretName: tenant-a-restricted-user
 # governance.kafkaUser: tenant-a-restricted-user
+.\kafka\scripts\sync-kafka-user-secret.ps1 -Tenant tenant-a -SecretName tenant-a-restricted-user
 git add tenants/tenant-a/dev-values.yaml
 git commit -m "Use restricted Kafka user for tenant-a demo"
 git push
@@ -341,6 +355,7 @@ Tenant B follows the same pattern with `tenant-b-restricted-user` and `tenant-b-
 Inspect platform pods:
 
 ```bash
+kubectl get pods -n argocd
 kubectl get pods -n platform-system
 kubectl get pods -n kafka-system
 ```
@@ -362,7 +377,7 @@ kubectl logs -n tenant-b -l app=tenant-b-flink-job,component=taskmanager --tail=
 Check Argo CD Applications and FlinkDeployments:
 
 ```bash
-kubectl get applications -n platform-system
+kubectl get applications -n argocd
 kubectl get flinkdeployment -A
 ```
 
