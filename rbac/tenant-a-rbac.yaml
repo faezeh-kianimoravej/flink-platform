@@ -1,10 +1,7 @@
 # The Flink Kubernetes Operator runs in the platform-system namespace.
 # During tenant onboarding, the Platform Team grants it namespace-scoped
 # permissions for each tenant namespace.
-#
-# This Role only applies inside tenant-a. It does not grant tenant-a access to
-# tenant-b, and it does not control Kafka topic access. Kafka permissions are
-# managed separately from Kubernetes RBAC.
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:

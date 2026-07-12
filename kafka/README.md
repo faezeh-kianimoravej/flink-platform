@@ -215,6 +215,18 @@ tenant-b/tenant-b-flink-user
 tenant-b/tenant-b-restricted-user
 ```
 
+## Local Kafka Client Properties
+
+Manual Kafka producer and consumer commands use `/tmp/tenant-a-client.properties` inside the Kafka broker pod. The file is generated from the `tenant-a-flink-user` Kubernetes Secret and is not created in the repository or on the local machine.
+
+The file contains runtime SCRAM credentials and is intentionally excluded from Git. Generate or refresh it inside the broker pod before manually producing test input messages or consuming enriched output messages:
+
+```powershell
+.\kafka\scripts\create-client-properties.ps1
+```
+
+The script writes the properties file directly to `kafka-system/flink-platform-kafka-broker-0:/tmp/tenant-a-client.properties`, so `kubectl cp` is no longer required.
+
 ACL summary:
 
 ```text

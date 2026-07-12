@@ -21,6 +21,7 @@ spec:
           patternType: literal
         operations:
           - Read
+          - Write
           - Describe
       - resource:
           type: topic
@@ -28,13 +29,22 @@ spec:
           patternType: literal
         operations:
           - Read
+          - Write
           - Describe
       - resource:
           type: topic
           name: tenant-a-enriched-orders
           patternType: literal
         operations:
+          - Read
           - Write
+          - Describe
+      - resource:
+          type: group
+          name: tenant-a-console-test
+          patternType: literal
+        operations:
+          - Read
           - Describe
       - resource:
           type: group
