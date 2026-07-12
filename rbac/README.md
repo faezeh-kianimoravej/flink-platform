@@ -71,6 +71,8 @@ This applies:
 - tenant-specific Roles
 - tenant-specific RoleBindings
 
+KafkaUser reconciliation is handled by the embedded Strimzi User Operator in the Kafka cluster namespace, not by tenant RBAC. KafkaUser manifests live under `kafka/users/`.
+
 In the final GitOps flow, Argo CD will synchronize these manifests automatically from the platform repository, so tenant onboarding becomes declarative and repeatable.
 
 ## Verification

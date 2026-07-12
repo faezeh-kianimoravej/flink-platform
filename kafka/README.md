@@ -262,6 +262,22 @@ The file contains runtime SCRAM credentials and is intentionally excluded from G
 
 The script writes the properties file directly to `kafka-system/flink-platform-kafka-broker-0:/tmp/tenant-a-client.properties`, so `kubectl cp` is no longer required.
 
+## Tenant A Manual Output Consumer
+
+For a live demo that shows only new output records:
+
+```powershell
+kubectl exec -it -n kafka-system flink-platform-kafka-broker-0 -- /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092 --topic tenant-a-enriched-orders --partition 0 --offset latest --command-config /tmp/tenant-a-client.properties
+```
+
+For inspecting all historical output records:
+
+```powershell
+kubectl exec -it -n kafka-system flink-platform-kafka-broker-0 -- /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092 --topic tenant-a-enriched-orders --partition 0 --offset earliest --command-config /tmp/tenant-a-client.properties
+```
+
+These commands read by explicit partition and offset instead of using a consumer group. `--from-beginning` does not replay old records when an existing consumer group already has committed offsets. The `tenant-a-console-test` group ACL is kept for optional grouped-consumer testing, but it is not the preferred local demo path.
+
 ACL summary:
 
 ```text
