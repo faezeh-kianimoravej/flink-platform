@@ -101,6 +101,8 @@ Tenant B uses `tenant-b-orders` and `tenant-b-products` as input topics, `tenant
 
 Strimzi generates the actual SCRAM credential Secrets in the tenant namespaces. The generated Secrets are not committed to Git.
 
+The Kafka custom resource keeps only the embedded Topic Operator enabled. Tenant `KafkaUser` resources are reconciled by standalone User Operator deployments in `rbac/`, scoped by namespace, tenant labels, and reciprocal ignored-user patterns so the operators do not compete over Kafka-side SCRAM credentials or ACLs.
+
 ## Argo CD and GitOps
 
 Argo CD runs in `platform-system`. The Application manifests in `argocd/` point at this repository and render `charts/flink-job` with tenant-specific values:

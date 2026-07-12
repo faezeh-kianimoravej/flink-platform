@@ -235,6 +235,8 @@ spec:
               value: flink-platform-kafka-kafka-bootstrap.kafka-system.svc:9091
             - name: STRIMZI_LABELS
               value: strimzi.io/cluster=flink-platform-kafka,platform.example.com/owner-team=tenant-a
+            - name: STRIMZI_IGNORED_USERS_PATTERN
+              value: "^tenant-b-.*$"
             - name: STRIMZI_CA_NAMESPACE
               value: kafka-system
             - name: STRIMZI_CA_CERT_NAME
@@ -244,7 +246,7 @@ spec:
             - name: STRIMZI_CLUSTER_CA_CERT_SECRET_NAME
               value: flink-platform-kafka-cluster-ca-cert
             - name: STRIMZI_EO_KEY_SECRET_NAME
-              value: flink-platform-kafka-entity-user-operator-certs
+              value: flink-platform-kafka-entity-topic-operator-certs
             - name: STRIMZI_EO_KEY_NAME
               value: entity-operator.key
             - name: STRIMZI_EO_CERT_NAME
@@ -329,6 +331,8 @@ spec:
               value: flink-platform-kafka-kafka-bootstrap.kafka-system.svc:9091
             - name: STRIMZI_LABELS
               value: strimzi.io/cluster=flink-platform-kafka,platform.example.com/owner-team=tenant-b
+            - name: STRIMZI_IGNORED_USERS_PATTERN
+              value: "^tenant-a-.*$"
             - name: STRIMZI_CA_NAMESPACE
               value: kafka-system
             - name: STRIMZI_CA_CERT_NAME
@@ -338,7 +342,7 @@ spec:
             - name: STRIMZI_CLUSTER_CA_CERT_SECRET_NAME
               value: flink-platform-kafka-cluster-ca-cert
             - name: STRIMZI_EO_KEY_SECRET_NAME
-              value: flink-platform-kafka-entity-user-operator-certs
+              value: flink-platform-kafka-entity-topic-operator-certs
             - name: STRIMZI_EO_KEY_NAME
               value: entity-operator.key
             - name: STRIMZI_EO_CERT_NAME

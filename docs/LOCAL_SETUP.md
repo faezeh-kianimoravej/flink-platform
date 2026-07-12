@@ -116,7 +116,7 @@ kubectl get crds | findstr kafka
 
 ## 7. Apply RBAC
 
-The `rbac/` directory contains tenant RBAC for the Flink Kubernetes Operator and the cross-namespace RoleBindings needed by the Strimzi User Operator.
+The `rbac/` directory contains tenant RBAC for the Flink Kubernetes Operator and the standalone tenant Strimzi User Operators. Each tenant User Operator watches only its tenant namespace, selects only that tenant's `KafkaUser` labels, and ignores the other tenant's Kafka usernames.
 
 ```bash
 kubectl apply -f rbac/
@@ -170,7 +170,7 @@ Kafka runs in `kafka-system`. Tenant Flink jobs connect to:
 flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092
 ```
 
-The Strimzi User Operator creates SCRAM credential Secrets in the tenant namespaces:
+The embedded Kafka User Operator is disabled; standalone tenant User Operators create SCRAM credential Secrets in the tenant namespaces:
 
 ```text
 tenant-a/tenant-a-flink-user

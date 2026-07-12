@@ -121,7 +121,8 @@ The manifest uses KRaft mode with:
 - no external listener
 - SCRAM-SHA-512 listener authentication
 - Strimzi simple authorization
-- the Strimzi Topic Operator and User Operator enabled
+- the Strimzi Topic Operator enabled
+- standalone tenant User Operators deployed from `rbac/strimzi-user-operator-tenant-rbac.yaml`
 
 Kafka topics are not created by this manifest. Tenant topics will be added separately after the shared cluster is running.
 
@@ -193,7 +194,9 @@ Kafka client access is managed with Strimzi `KafkaUser` resources in:
 kafka/users/
 ```
 
-The User Operator watches tenant namespaces and generates SCRAM credentials as Kubernetes Secrets in the same namespace as each `KafkaUser`. Generated Secrets are never committed to Git.
+The embedded Strimzi User Operator is intentionally disabled in `kafka/kafka-cluster.yaml`. Tenant users are reconciled by the standalone User Operator deployments in `rbac/strimzi-user-operator-tenant-rbac.yaml`.
+
+Each standalone User Operator watches one tenant namespace, uses a tenant-specific `STRIMZI_LABELS` selector, and ignores the other tenant's Kafka usernames with `STRIMZI_IGNORED_USERS_PATTERN`. This prevents two User Operators from competing over the same Kafka-side SCRAM credentials or ACLs. Generated Secrets are created in the same namespace as each `KafkaUser` and are never committed to Git.
 
 Apply Kafka auth resources:
 
