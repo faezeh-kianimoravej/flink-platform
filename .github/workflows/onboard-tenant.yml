@@ -107,8 +107,12 @@ jobs:
             exit 1
           fi
 
-      - name: Create onboarding branch
-        run: git switch -c "$BRANCH_NAME"
+      - name: Create onboarding branch from origin/main
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git switch --detach origin/main
+          git switch -c "$BRANCH_NAME"
 
       - name: Generate tenant files
         id: generate
