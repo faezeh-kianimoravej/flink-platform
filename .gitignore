@@ -1,0 +1,22 @@
+*-client.properties
+
+# Python bytecode and interpreter caches created by the onboarding scripts.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Common Python test and tooling caches.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local ad hoc render outputs and temporary files from onboarding checks.
+*-rendered.yaml
+*-rendered.yml
+/-o
+*.tmp
+*.temp
+*.bak
+*.orig

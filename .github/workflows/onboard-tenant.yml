@@ -1,0 +1,186 @@
+name: Onboard Tenant
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant_id:
+        description: "Tenant identifier, for example tenant-c."
+        required: true
+        type: string
+      tenant_display_name:
+        description: "Human-readable tenant name, for example Tenant C."
+        required: true
+        type: string
+      repository_name:
+        description: "Tenant job repository name, for example tenant-c-flink-job."
+        required: true
+        type: string
+      image_repository:
+        description: "GHCR image repository. Leave blank for ghcr.io/faezeh-kianimoravej/<repository_name>."
+        required: false
+        type: string
+      initial_image_tag:
+        description: "Full immutable tenant repository commit SHA image tag. Do not use latest."
+        required: true
+        type: string
+      java_main_class:
+        description: "Tenant Flink job main class."
+        required: true
+        type: string
+      jar_name:
+        description: "Job JAR file name inside the image, for example tenant-c-flink-job.jar."
+        required: true
+        type: string
+      application_id:
+        description: "Governance application ID, for example APP-TENANT-C."
+        required: true
+        type: string
+      owner_team:
+        description: "Owner team label value, for example tenant-c."
+        required: true
+        type: string
+      input_topics:
+        description: "Comma-separated tenant input topics, for example tenant-c-orders,tenant-c-products."
+        required: true
+        type: string
+      output_topic:
+        description: "Tenant output topic, for example tenant-c-enriched-orders."
+        required: true
+        type: string
+      consumer_group_id:
+        description: "Tenant consumer group. Leave blank for <tenant_id>-flink-job."
+        required: false
+        type: string
+      kafka_user:
+        description: "KafkaUser and Secret name. Leave blank for <tenant_id>-flink-user."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  onboard:
+    name: Generate Tenant Onboarding PR
+    runs-on: ubuntu-latest
+
+    env:
+      BRANCH_NAME: onboard/${{ inputs.tenant_id }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python dependencies
+        run: python -m pip install --upgrade pyyaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate onboarding inputs
+        run: |
+          set -euo pipefail
+          python .github/scripts/generate_tenant.py \
+            --tenant-id "${{ inputs.tenant_id }}" \
+            --tenant-display-name "${{ inputs.tenant_display_name }}" \
+            --repository-name "${{ inputs.repository_name }}" \
+            --image-repository "${{ inputs.image_repository }}" \
+            --initial-image-tag "${{ inputs.initial_image_tag }}" \
+            --java-main-class "${{ inputs.java_main_class }}" \
+            --jar-name "${{ inputs.jar_name }}" \
+            --application-id "${{ inputs.application_id }}" \
+            --owner-team "${{ inputs.owner_team }}" \
+            --input-topics "${{ inputs.input_topics }}" \
+            --output-topic "${{ inputs.output_topic }}" \
+            --consumer-group-id "${{ inputs.consumer_group_id }}" \
+            --kafka-user "${{ inputs.kafka_user }}" \
+            --dry-run
+
+      - name: Check onboarding branch does not already exist
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            echo "Branch already exists: $BRANCH_NAME" >&2
+            exit 1
+          fi
+
+      - name: Create onboarding branch
+        run: git switch -c "$BRANCH_NAME"
+
+      - name: Generate tenant files
+        id: generate
+        run: |
+          set -euo pipefail
+          python .github/scripts/generate_tenant.py \
+            --tenant-id "${{ inputs.tenant_id }}" \
+            --tenant-display-name "${{ inputs.tenant_display_name }}" \
+            --repository-name "${{ inputs.repository_name }}" \
+            --image-repository "${{ inputs.image_repository }}" \
+            --initial-image-tag "${{ inputs.initial_image_tag }}" \
+            --java-main-class "${{ inputs.java_main_class }}" \
+            --jar-name "${{ inputs.jar_name }}" \
+            --application-id "${{ inputs.application_id }}" \
+            --owner-team "${{ inputs.owner_team }}" \
+            --input-topics "${{ inputs.input_topics }}" \
+            --output-topic "${{ inputs.output_topic }}" \
+            --consumer-group-id "${{ inputs.consumer_group_id }}" \
+            --kafka-user "${{ inputs.kafka_user }}"
+
+      - name: Validate generated onboarding
+        run: |
+          set -euo pipefail
+          python .github/scripts/validate_tenant_onboarding.py \
+            --tenant-id "${{ inputs.tenant_id }}" \
+            --check-git-diff
+
+      - name: Commit onboarding files
+        run: |
+          set -euo pipefail
+          git config user.name "tenant-onboarding-bot"
+          git config user.email "tenant-onboarding-bot@users.noreply.github.com"
+          git add ${{ steps.generate.outputs.generated_files_space }}
+          git commit -m "chore(${{ inputs.tenant_id }}): generate platform onboarding resources"
+          git push origin "$BRANCH_NAME"
+
+      - name: Open onboarding pull request
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          cat > "$body_file" <<BODY
+          ## Tenant onboarding
+
+          Generated platform onboarding resources for \`${{ inputs.tenant_id }}\`.
+
+          ### Generated files
+
+          \`\`\`text
+          ${{ steps.generate.outputs.generated_files }}
+          \`\`\`
+
+          ### Runtime inputs
+
+          - Image repository: \`${{ steps.generate.outputs.image_repository }}\`
+          - Image tag: \`${{ steps.generate.outputs.image_tag }}\`
+          - Kafka topics: \`${{ steps.generate.outputs.kafka_topics }}\`
+          - Kafka user: \`${{ steps.generate.outputs.kafka_user }}\`
+          - Operator namespace opt-in: namespace-scoped RBAC generated; active repository has no operator watch-namespace config file (\`${{ steps.generate.outputs.operator_watch_config }}\`).
+
+          ### Remaining manual steps
+
+          - Review and approve tenant onboarding governance.
+          - Review RBAC and Kafka ACL scope.
+          - Merge this PR after validation passes.
+          - Apply/bootstrap namespace, RBAC, Kafka resources, and Argo CD Application where the local setup still uses manual \`kubectl apply\`.
+          - Run \`kafka/scripts/sync-kafka-user-secret.ps1\` for the tenant Kafka Secret in local Minikube after Strimzi creates it.
+          - Configure production secret synchronization and production resource sizing outside this v1 workflow.
+          BODY
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --title "chore(${{ inputs.tenant_id }}): onboard Flink tenant" \
+            --body-file "$body_file"

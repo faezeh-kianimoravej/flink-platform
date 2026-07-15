@@ -1,0 +1,16 @@
+# Personal repository placeholder: replace this user with real platform and
+# tenant owner teams before enabling required CODEOWNERS review.
+
+# Shared platform-owned automation and infrastructure.
+/.github/ @faezeh-kianimoravej
+/argocd/ @faezeh-kianimoravej
+/charts/ @faezeh-kianimoravej
+/kafka/ @faezeh-kianimoravej
+/namespaces/ @faezeh-kianimoravej
+/operator/ @faezeh-kianimoravej
+/rbac/ @faezeh-kianimoravej
+/templates/ @faezeh-kianimoravej
+
+# Tenant deployment values are still reviewed through the platform owner
+# placeholder until real tenant GitHub teams exist.
+/tenants/ @faezeh-kianimoravej
