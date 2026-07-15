@@ -67,6 +67,7 @@ jobs:
 
     env:
       BRANCH_NAME: onboard/${{ inputs.tenant_id }}
+      WORKTREE_DIR: ${{ runner.temp }}/tenant-onboarding/${{ inputs.tenant_id }}
 
     steps:
       - name: Checkout platform repository
@@ -107,18 +108,20 @@ jobs:
             exit 1
           fi
 
-      - name: Create onboarding branch from origin/main
+      - name: Create clean onboarding worktree from origin/main
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
-          git switch --detach origin/main
-          git switch -c "$BRANCH_NAME"
+          rm -rf "$WORKTREE_DIR"
+          git worktree add --detach "$WORKTREE_DIR" origin/main
+          git -C "$WORKTREE_DIR" switch -c "$BRANCH_NAME"
 
       - name: Generate tenant files
         id: generate
         run: |
           set -euo pipefail
           python .github/scripts/generate_tenant.py \
+            --repo-root "$WORKTREE_DIR" \
             --tenant-id "${{ inputs.tenant_id }}" \
             --tenant-display-name "${{ inputs.tenant_display_name }}" \
             --repository-name "${{ inputs.repository_name }}" \
@@ -137,14 +140,15 @@ jobs:
         run: |
           set -euo pipefail
           python .github/scripts/validate_tenant_onboarding.py \
+            --repo-root "$WORKTREE_DIR" \
             --tenant-id "${{ inputs.tenant_id }}" \
             --check-git-diff
 
       - name: Commit onboarding files
         run: |
           set -euo pipefail
-          git config user.name "tenant-onboarding-bot"
-          git config user.email "tenant-onboarding-bot@users.noreply.github.com"
+          git -C "$WORKTREE_DIR" config user.name "tenant-onboarding-bot"
+          git -C "$WORKTREE_DIR" config user.email "tenant-onboarding-bot@users.noreply.github.com"
           files=(
             "namespaces/${{ inputs.tenant_id }}.yaml"
             "rbac/${{ inputs.tenant_id }}-rbac.yaml"
@@ -153,9 +157,9 @@ jobs:
             "kafka/topics/${{ inputs.tenant_id }}-topics.yaml"
             "kafka/users/${{ inputs.tenant_id }}-flink-user.yaml"
           )
-          git add -- "${files[@]}"
-          git commit -m "chore(${{ inputs.tenant_id }}): generate platform onboarding resources"
-          git push origin "$BRANCH_NAME"
+          git -C "$WORKTREE_DIR" add -- "${files[@]}"
+          git -C "$WORKTREE_DIR" commit -m "chore(${{ inputs.tenant_id }}): generate platform onboarding resources"
+          git -C "$WORKTREE_DIR" push origin "$BRANCH_NAME"
 
       - name: Open onboarding pull request
         uses: actions/github-script@v7
