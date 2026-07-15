@@ -141,7 +141,15 @@ jobs:
           set -euo pipefail
           git config user.name "tenant-onboarding-bot"
           git config user.email "tenant-onboarding-bot@users.noreply.github.com"
-          git add ${{ steps.generate.outputs.generated_files_space }}
+          files=(
+            "namespaces/${{ inputs.tenant_id }}.yaml"
+            "rbac/${{ inputs.tenant_id }}-rbac.yaml"
+            "tenants/${{ inputs.tenant_id }}/dev-values.yaml"
+            "argocd/${{ inputs.tenant_id }}-flink-job.yaml"
+            "kafka/topics/${{ inputs.tenant_id }}-topics.yaml"
+            "kafka/users/${{ inputs.tenant_id }}-flink-user.yaml"
+          )
+          git add -- "${files[@]}"
           git commit -m "chore(${{ inputs.tenant_id }}): generate platform onboarding resources"
           git push origin "$BRANCH_NAME"
 
