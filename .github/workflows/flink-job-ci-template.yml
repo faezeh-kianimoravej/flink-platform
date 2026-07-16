@@ -22,6 +22,31 @@ on:
         required: false
         default: "target/*.jar"
         type: string
+      artifact_repository:
+        description: "Repository mode for resolving the shared Maven parent: github-packages or nexus."
+        required: false
+        default: "github-packages"
+        type: string
+      nexus_url:
+        description: "Nexus repository URL for local/self-hosted runs; leave empty in GitHub Packages mode."
+        required: false
+        default: ""
+        type: string
+      nexus_server_id:
+        description: "Maven server/repository id to use for Nexus mode."
+        required: false
+        default: "nexus-public"
+        type: string
+    secrets:
+      GH_PACKAGES_READ_TOKEN:
+        description: "Token with read access to the GitHub Packages Maven repository that hosts flink-job-parent."
+        required: false
+      NEXUS_USERNAME:
+        description: "Optional Nexus username for Maven artifact resolution in nexus mode."
+        required: false
+      NEXUS_PASSWORD:
+        description: "Optional Nexus password for Maven artifact resolution in nexus mode."
+        required: false
 
 permissions:
   contents: read
@@ -36,8 +61,11 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}
 
     steps:
-      - name: Checkout source repository
+      - name: Checkout calling repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -46,8 +74,134 @@ jobs:
           java-version: ${{ inputs.java_version }}
           cache: maven
 
+      - name: Validate artifact repository mode
+        shell: bash
+        run: |
+          case "${{ inputs.artifact_repository }}" in
+            github-packages|nexus)
+              ;;
+            *)
+              echo "::error::artifact_repository must be 'github-packages' or 'nexus'."
+              exit 1
+              ;;
+          esac
+
+      - name: Configure Maven settings for GitHub Packages
+        if: inputs.artifact_repository == 'github-packages'
+        shell: bash
+        env:
+          GH_PACKAGES_READ_TOKEN: ${{ secrets.GH_PACKAGES_READ_TOKEN }}
+        run: |
+          if [ -z "$GH_PACKAGES_READ_TOKEN" ]; then
+            echo "::error::GH_PACKAGES_READ_TOKEN is required when artifact_repository is 'github-packages'."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <servers>
+                  <server>
+                      <id>github</id>
+                      <username>${GITHUB_ACTOR}</username>
+                      <password>${GH_PACKAGES_READ_TOKEN}</password>
+                  </server>
+              </servers>
+              <profiles>
+                  <profile>
+                      <id>github-packages</id>
+                      <repositories>
+                          <repository>
+                              <id>github</id>
+                              <url>https://maven.pkg.github.com/faezeh-kianimoravej/flink-job-parent</url>
+                          </repository>
+                      </repositories>
+                  </profile>
+              </profiles>
+              <activeProfiles>
+                  <activeProfile>github-packages</activeProfile>
+              </activeProfiles>
+          </settings>
+          EOF
+
+      - name: Configure Maven settings for Nexus
+        if: inputs.artifact_repository == 'nexus'
+        shell: bash
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          if [ -z "${{ inputs.nexus_url }}" ]; then
+            echo "::error::nexus_url is required when artifact_repository is 'nexus'."
+            exit 1
+          fi
+
+          if { [ -n "$NEXUS_USERNAME" ] && [ -z "$NEXUS_PASSWORD" ]; } || { [ -z "$NEXUS_USERNAME" ] && [ -n "$NEXUS_PASSWORD" ]; }; then
+            echo "::error::NEXUS_USERNAME and NEXUS_PASSWORD must be provided together."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.m2"
+          {
+            cat <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          EOF
+            if [ -n "$NEXUS_USERNAME" ]; then
+              cat <<EOF
+              <servers>
+                  <server>
+                      <id>${{ inputs.nexus_server_id }}</id>
+                      <username>${NEXUS_USERNAME}</username>
+                      <password>${NEXUS_PASSWORD}</password>
+                  </server>
+              </servers>
+          EOF
+            fi
+            cat <<EOF
+              <profiles>
+                  <profile>
+                      <id>nexus</id>
+                      <repositories>
+                          <repository>
+                              <id>${{ inputs.nexus_server_id }}</id>
+                              <url>${{ inputs.nexus_url }}</url>
+                              <releases>
+                                  <enabled>true</enabled>
+                              </releases>
+                              <snapshots>
+                                  <enabled>true</enabled>
+                              </snapshots>
+                          </repository>
+                      </repositories>
+                      <pluginRepositories>
+                          <pluginRepository>
+                              <id>${{ inputs.nexus_server_id }}</id>
+                              <url>${{ inputs.nexus_url }}</url>
+                              <releases>
+                                  <enabled>true</enabled>
+                              </releases>
+                              <snapshots>
+                                  <enabled>true</enabled>
+                              </snapshots>
+                          </pluginRepository>
+                      </pluginRepositories>
+                  </profile>
+              </profiles>
+              <activeProfiles>
+                  <activeProfile>nexus</activeProfile>
+              </activeProfiles>
+          </settings>
+          EOF
+          } > "$HOME/.m2/settings.xml"
+
       - name: Build and test with Maven
-        run: mvn clean verify
+        run: mvn --settings "$HOME/.m2/settings.xml" clean verify
 
       - name: Verify Flink job JAR exists
         shell: bash
@@ -55,16 +209,17 @@ jobs:
           shopt -s nullglob
           jars=( ${{ inputs.jar_path }} )
           if [ ${#jars[@]} -eq 0 ]; then
-            echo "No JAR found for jar_path: ${{ inputs.jar_path }}"
-            exit 1
+              echo "No JAR found for jar_path: ${{ inputs.jar_path }}"
+              exit 1
           fi
 
       - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Build Docker image
         run: |
@@ -76,6 +231,7 @@ jobs:
             .
 
       - name: Push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           docker push "$IMAGE:latest"
           docker push "$IMAGE:${{ github.sha }}"
