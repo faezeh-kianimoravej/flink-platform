@@ -1,0 +1,52 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: tenant-c-flink-user
+  namespace: kafka-system
+  labels:
+    strimzi.io/cluster: flink-platform-kafka
+    app.kubernetes.io/managed-by: flink-platform
+    app.kubernetes.io/part-of: multi-tenant-flink-platform
+    platform.example.com/application-id: APP-TENANT-C
+    platform.example.com/owner-team: tenant-c
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: tenant-c-orders
+          patternType: literal
+        operations:
+          - Read
+          - Describe
+      - resource:
+          type: topic
+          name: tenant-c-products
+          patternType: literal
+        operations:
+          - Read
+          - Describe
+      - resource:
+          type: topic
+          name: tenant-c-enriched-orders
+          patternType: literal
+        operations:
+          - Write
+          - Describe
+      - resource:
+          type: group
+          name: tenant-c-flink-job
+          patternType: literal
+        operations:
+          - Read
+          - Describe
+      - resource:
+          type: group
+          name: tenant-c-flink-job-products
+          patternType: literal
+        operations:
+          - Read
+          - Describe

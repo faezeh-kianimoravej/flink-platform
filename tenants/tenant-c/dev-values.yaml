@@ -1,0 +1,38 @@
+tenantName: tenant-c
+namespace: tenant-c
+
+image:
+  repository: ghcr.io/faezeh-kianimoravej/tenant-c-flink-job
+  tag: 23fba8a7f2bf824e6f6b5542a6fa50b8b76004ba
+  pullPolicy: IfNotPresent
+
+flinkVersion: v2_2
+
+job:
+  className: com.example.tenantc.TenantCFlinkJobApplication
+  jarURI: local:///opt/flink/usrlib/tenant-c-flink-job.jar
+  parallelism: 1
+  restartNonce: 7
+
+kafka:
+  bootstrapServers: flink-platform-kafka-kafka-bootstrap.kafka-system.svc.cluster.local:9092
+  inputTopics:
+    - tenant-c-orders
+    - tenant-c-products
+  outputTopic: tenant-c-enriched-orders
+  consumerGroupId: tenant-c-flink-job
+  security:
+    enabled: true
+    protocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-512
+    username: tenant-c-flink-user
+    userSecretName: tenant-c-flink-user
+    passwordKey: password
+
+governance:
+  applicationId: APP-TENANT-C
+  ownerTeam: tenant-c
+  kafkaUser: tenant-c-flink-user
+
+checkpointing:
+  interval: 30s
