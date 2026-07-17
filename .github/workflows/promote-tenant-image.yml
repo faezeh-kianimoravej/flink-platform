@@ -1,0 +1,168 @@
+name: Promote Tenant Image
+
+on:
+  repository_dispatch:
+    types: [tenant-image-published]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promotion-${{ github.event.client_payload.tenant_id }}-dev
+  cancel-in-progress: false
+
+jobs:
+  promote-dev-image:
+    name: Promote Tenant Dev Image
+    runs-on: ubuntu-latest
+
+    env:
+      TENANT_ID: ${{ github.event.client_payload.tenant_id }}
+      REPOSITORY_NAME: ${{ github.event.client_payload.repository_name }}
+      IMAGE_REPOSITORY: ${{ github.event.client_payload.image_repository }}
+      IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+      SOURCE_COMMIT_SHA: ${{ github.event.client_payload.source_commit_sha }}
+      SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+
+    steps:
+      - name: Validate promotion token
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::PLATFORM_PROMOTION_TOKEN is required in the flink-platform repository."
+            exit 1
+          fi
+
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade PyYAML
+
+      - name: Validate and update tenant dev image tag
+        id: promote
+        shell: bash
+        run: |
+          python .github/scripts/promote_tenant_image.py promote \
+            --repo-root . \
+            --tenant-id "$TENANT_ID" \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-repository "$IMAGE_REPOSITORY" \
+            --image-tag "$IMAGE_TAG" \
+            --source-commit-sha "$SOURCE_COMMIT_SHA" \
+            --source-repository "$SOURCE_REPOSITORY" \
+            --write
+
+      - name: Stop when dev already uses this image
+        if: steps.promote.outputs.changed == 'false'
+        run: echo "Tenant dev image tag already equals ${IMAGE_TAG}."
+
+      - name: Discover existing promotion PRs
+        if: steps.promote.outputs.changed == 'true'
+        id: existing_prs
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+        shell: bash
+        run: |
+          gh pr list \
+            --state open \
+            --base main \
+            --json number,headRefName,url \
+            > existing-prs.json
+          python .github/scripts/promote_tenant_image.py plan-prs \
+            --tenant-id "$TENANT_ID" \
+            --image-tag "$IMAGE_TAG" \
+            --existing-prs-json existing-prs.json
+
+      - name: Stop when same SHA promotion PR already exists
+        if: steps.promote.outputs.changed == 'true' && steps.existing_prs.outputs.same_sha == 'true'
+        run: echo "An open promotion PR already exists for ${TENANT_ID} ${IMAGE_TAG}."
+
+      - name: Close older promotion PRs for this tenant
+        if: steps.promote.outputs.changed == 'true' && steps.existing_prs.outputs.same_sha == 'false' && steps.existing_prs.outputs.older_numbers != ''
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+        shell: bash
+        run: |
+          auth_header="$(python -c 'import base64, os; print("AUTHORIZATION: basic " + base64.b64encode(("x-access-token:" + os.environ["GH_TOKEN"]).encode()).decode())')"
+          git config --local http.https://github.com/.extraheader \
+            "$auth_header"
+          unset auth_header
+          trap 'git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
+
+          IFS=',' read -ra numbers <<< "${{ steps.existing_prs.outputs.older_numbers }}"
+          IFS=',' read -ra branches <<< "${{ steps.existing_prs.outputs.older_branches }}"
+
+          for index in "${!numbers[@]}"; do
+            number="${numbers[$index]}"
+            branch="${branches[$index]}"
+            gh pr close "$number" \
+              --comment "Closing this older dev image promotion because ${TENANT_ID} now has a newer image tag ${IMAGE_TAG}."
+            git push origin --delete "$branch" || true
+          done
+
+      - name: Create promotion branch and commit
+        if: steps.promote.outputs.changed == 'true' && steps.existing_prs.outputs.same_sha == 'false'
+        id: commit
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+        shell: bash
+        run: |
+          short_sha="${{ steps.promote.outputs.short_sha }}"
+          branch="promote/${TENANT_ID}/${short_sha}"
+          auth_header="$(python -c 'import base64, os; print("AUTHORIZATION: basic " + base64.b64encode(("x-access-token:" + os.environ["GH_TOKEN"]).encode()).decode())')"
+          git config --local http.https://github.com/.extraheader \
+            "$auth_header"
+          unset auth_header
+          trap 'git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
+
+          git config user.name "flink-platform-promotion-bot"
+          git config user.email "flink-platform-promotion-bot@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add "${{ steps.promote.outputs.values_file }}"
+          git commit -m "chore(${TENANT_ID}): promote image to ${short_sha}"
+          git push --force-with-lease origin "$branch"
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open promotion pull request
+        if: steps.promote.outputs.changed == 'true' && steps.existing_prs.outputs.same_sha == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_PROMOTION_TOKEN }}
+        shell: bash
+        run: |
+          short_sha="${{ steps.promote.outputs.short_sha }}"
+          image_reference="${{ steps.promote.outputs.image_reference }}"
+
+          body_file="$(mktemp)"
+          cat > "$body_file" <<EOF
+          ## Tenant image promotion
+
+          - Tenant: \`${TENANT_ID}\`
+          - Source repository: \`${SOURCE_REPOSITORY}\`
+          - Source commit SHA: \`${SOURCE_COMMIT_SHA}\`
+          - Image reference: \`${image_reference}\`
+          - Environment: \`dev\`
+
+          This PR updates only \`${{ steps.promote.outputs.values_file }}\` so the dev environment uses the immutable tenant image tag published by tenant CI.
+
+          Platform Validation must pass, and a human must review and manually merge this PR before Argo CD deploys the change.
+          EOF
+
+          gh pr create \
+            --base main \
+            --head "${{ steps.commit.outputs.branch }}" \
+            --title "Promote ${TENANT_ID} image to ${short_sha}" \
+            --body-file "$body_file"

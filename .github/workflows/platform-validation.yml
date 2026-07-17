@@ -1,0 +1,102 @@
+name: Platform Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  platform-validation:
+    name: Platform Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade PyYAML
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install kubeconform
+        env:
+          KUBECONFORM_VERSION: "0.6.7"
+        run: |
+          curl -sSL \
+            "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            -o kubeconform.tar.gz
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Helm lint
+        run: helm lint charts/flink-job
+
+      - name: Parse platform YAML syntax
+        run: |
+          python .github/scripts/validate_platform.py validate-yaml \
+            namespaces \
+            rbac \
+            argocd \
+            kafka \
+            operator \
+            tenants
+
+      - name: Render every tenant values file
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .platform-validation/rendered
+          mapfile -t values_files < <(
+            find tenants -mindepth 2 -maxdepth 2 \
+              \( -name dev-values.yaml -o -name test-values.yaml -o -name prod-values.yaml \) \
+              | sort
+          )
+
+          if [ "${#values_files[@]}" -eq 0 ]; then
+            echo "::error::No tenant values files found."
+            exit 1
+          fi
+
+          for values_file in "${values_files[@]}"; do
+            tenant="$(basename "$(dirname "$values_file")")"
+            environment="$(basename "$values_file" -values.yaml)"
+            manifest=".platform-validation/rendered/${tenant}-${environment}.yaml"
+            helm template "${tenant}-${environment}" charts/flink-job -f "$values_file" > "$manifest"
+            python .github/scripts/validate_platform.py validate-rendered --manifest "$manifest" --values-file "$values_file"
+          done
+
+      - name: Kubernetes schema validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t manifest_files < <(
+            find namespaces rbac argocd kafka operator .platform-validation/rendered \
+              \( -name '*.yaml' -o -name '*.yml' \) \
+              | sort
+          )
+
+          kubeconform \
+            -strict \
+            -summary \
+            -ignore-missing-schemas \
+            "${manifest_files[@]}"
+
+      - name: Semantic platform validation
+        run: |
+          python .github/scripts/validate_platform.py validate-semantics \
+            argocd \
+            kafka \
+            .platform-validation/rendered
+
+      - name: Run Python tests
+        run: python -m unittest discover -s tests

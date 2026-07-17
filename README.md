@@ -143,13 +143,96 @@ The boundary is simple: tenant repositories produce images; this repository depl
 ```text
 tenant job repository
   -> CI pipeline
-  -> GHCR image
-  -> tenant values update in flink-platform
+  -> immutable GHCR image tagged with the full Git SHA
+  -> automatic dev promotion PR in flink-platform
+  -> Platform Validation
+  -> human review and manual merge
   -> Argo CD
   -> shared Helm chart
   -> FlinkDeployment
   -> Flink Kubernetes Operator
   -> running tenant job
 ```
+
+Tenant repositories never deploy directly to Kubernetes. After a tenant change is merged to `main`, tenant CI must pass Maven verification, build the Docker image, and push the immutable SHA tag to GHCR before it sends a promotion request to this repository.
+
+The promotion workflow updates only `tenants/<tenant>/dev-values.yaml`. Test and production promotion stay manual: copy a reviewed immutable SHA into `test-values.yaml` or `prod-values.yaml`, open a normal platform pull request, let Platform Validation run, and merge after approval.
+
+Rollback uses the same PR-based GitOps path. Revert the dev image tag to a previous known-good SHA, let Platform Validation pass, merge the PR, and Argo CD reconciles the previous image.
+
+## Platform Validation
+
+`.github/workflows/platform-validation.yml` is the general required Pull Request check for this repository. It runs on every Pull Request targeting `main` and validates the platform as a whole:
+
+- Helm lint for `charts/flink-job`
+- Helm rendering for every `tenants/*/dev-values.yaml`, `test-values.yaml`, and `prod-values.yaml`
+- rendered `FlinkDeployment` semantics, including immutable non-`latest` SHA image tags
+- YAML syntax under `namespaces/`, `rbac/`, `argocd/`, `kafka/`, `operator/`, and `tenants/`
+- Kubernetes schema validation with kubeconform
+- semantic validation for Argo CD `Application`, Strimzi `KafkaTopic`, Strimzi `KafkaUser`, and rendered `FlinkDeployment` resources
+- Python tests for promotion and validation helpers
+
+Keep onboarding validation separate. `Validate Tenant Onboarding` protects onboarding-generated resources, while `Platform Validation` protects every platform Pull Request.
+
+## Automatic Dev Image Promotion
+
+`.github/workflows/promote-tenant-image.yml` listens for `repository_dispatch` events of type `tenant-image-published`. Tenant repositories send the dispatch only after their reusable CI job succeeds on a `push` to `main`.
+
+The dispatch payload contains:
+
+```text
+tenant_id
+repository_name
+image_repository
+image_tag
+source_commit_sha
+source_repository
+```
+
+The platform workflow verifies the tenant exists, `tenants/<tenant_id>/dev-values.yaml` exists, the configured image repository matches the request, and the image tag is the full lowercase 40-character Git SHA. It rejects `latest`, semantic tags, branch names, empty values, malformed SHAs, and repository mismatches.
+
+Promotion branches use:
+
+```text
+promote/<tenant>/<short-sha>
+```
+
+Promotion commits use:
+
+```text
+chore(<tenant>): promote image to <short-sha>
+```
+
+Promotion PRs are titled:
+
+```text
+Promote <tenant> image to <short-sha>
+```
+
+Duplicate strategy: workflow-level concurrency is scoped to `promotion-<tenant>-dev`, so tenants do not block each other. Before creating a PR, the workflow searches for existing open promotion PRs for the same tenant. If the same SHA is already open, it exits successfully. If an older SHA is open, it closes that older PR, deletes the old branch when possible, and opens a fresh PR for the newer SHA. This keeps only one open dev promotion PR per tenant.
+
+## Required GitHub Configuration
+
+For this thesis prototype, use a fine-grained personal access token for `PLATFORM_PROMOTION_TOKEN`. A GitHub App installation token is preferable in a production organization because it is easier to scope, rotate, and audit.
+
+Create the fine-grained PAT in GitHub under **Settings -> Developer settings -> Personal access tokens -> Fine-grained tokens**. Grant access only to the repositories that need it.
+
+Store `PLATFORM_PROMOTION_TOKEN` in:
+
+- each tenant repository that needs to request promotion, so it can call `repository_dispatch` on `flink-platform`
+- the `flink-platform` repository, so the promotion workflow can push the promotion branch and open a PR in a way that triggers Pull Request validation
+
+Required repository permissions for the token:
+
+- `flink-platform`: Contents read/write, Pull requests read/write, Metadata read
+- tenant repositories: no write access required for promotion, but the secret must be readable by Actions in that repository
+
+Template-created tenant repositories must define the repository variable:
+
+```text
+TENANT_ID=<tenant-id>
+```
+
+Concrete repositories such as `tenant-a-flink-job` and `tenant-b-flink-job` hardcode their tenant ID in workflow YAML. Template-created repositories do not parse the repository name; they read `TENANT_ID`.
 
 The reusable CI workflow for tenant repositories is stored under `.github/workflows/`. See [.github/workflows/README.md](.github/workflows/README.md).
