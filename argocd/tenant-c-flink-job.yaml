@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-c-flink-job
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/faezeh-kianimoravej/flink-platform.git
+    targetRevision: main
+    path: charts/flink-job
+    helm:
+      releaseName: tenant-c
+      valueFiles:
+        - ../../tenants/tenant-c/dev-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-c
+  ignoreDifferences:
+    - group: flink.apache.org
+      kind: FlinkDeployment
+      jsonPointers:
+        - /metadata/finalizers
+        - /metadata/managedFields
+        - /metadata/generation
+        - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
